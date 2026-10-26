@@ -20,7 +20,9 @@ export function AdminLayout() {
             <Link to="/admin" className="text-slate-600 hover:text-indigo-600">
               الرئيسية
             </Link>
-            {/* More links later */}
+            <Link to="/admin/players" className="text-slate-600 hover:text-indigo-600">
+              الأسماء
+            </Link>
           </nav>
         </div>
         <button
