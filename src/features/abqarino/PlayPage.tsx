@@ -10,7 +10,7 @@ import {
   type FullSession,
   type SessionQuestion,
 } from '../../services/sessions.service'
-import { listGroups, type QuestionGroup } from '../../services/groups.service'
+import { listGroupsWithCounts, type QuestionGroup } from '../../services/groups.service'
 import { PlayerWheel } from './PlayerWheel'
 import { Confetti } from './Confetti'
 import { setSoundEnabled, sfx, warmSpeech } from '../../lib/sounds'
@@ -96,12 +96,12 @@ export function PlayPage() {
           setPhase('pick_group')
           setSelectedGroupId(null)
           setGroupPicking(false)
-          const gs = await listGroups(full.session.game_id, true)
-          setGroups(gs)
+          const gs = await listGroupsWithCounts(full.session.game_id, true)
+          setGroups(gs.filter((g) => (g.question_count || 0) > 0))
         } else if (full.session.status === 'ready' || full.session.status === 'selecting_player') {
           setPhase('idle')
-          const gs = await listGroups(full.session.game_id, true)
-          setGroups(gs)
+          const gs = await listGroupsWithCounts(full.session.game_id, true)
+          setGroups(gs.filter((g) => (g.question_count || 0) > 0))
         }
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'تعذر تحميل الجولة')
@@ -208,14 +208,12 @@ export function PlayPage() {
     (name: string) => {
       if (postSpinRef.current === 'celebrate' || postSpinRef.current === 'you_are_ready') return
       if (postSpinRef.current === 'pick_group') return
-
       clearPostSpinTimers()
       setPhase('celebrate')
       setConfetti(true)
       setCountdown(5)
       sfx.nameReveal()
       window.setTimeout(() => sfx.secondTick(5), 400)
-
       for (let s = 4; s >= 1; s--) {
         const delay = (5 - s) * 1000
         const tid = window.setTimeout(() => {
@@ -224,14 +222,12 @@ export function PlayPage() {
         }, delay)
         postSpinTimers.current.push(tid)
       }
-
       const tReady = window.setTimeout(() => {
         setPhase('you_are_ready')
         setConfetti(false)
         sfx.youAreReady()
       }, 5000)
       postSpinTimers.current.push(tReady)
-
       const tGroups = window.setTimeout(() => {
         setPhase('pick_group')
         setSelectedGroupId(null)
@@ -245,9 +241,7 @@ export function PlayPage() {
   )
 
   const onWheelLanded = useCallback(
-    (name: string) => {
-      startCelebrateSequence(name)
-    },
+    (name: string) => startCelebrateSequence(name),
     [startCelebrateSequence]
   )
 
@@ -263,8 +257,8 @@ export function PlayPage() {
       await selectPlayer(sessionId)
       const full = await reload()
       if (full) {
-        const g2 = await listGroups(full.session.game_id, true)
-        setGroups(g2)
+        const g2 = await listGroupsWithCounts(full.session.game_id, true)
+        setGroups(g2.filter((g) => (g.question_count || 0) > 0))
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'فشل اختيار اللاعب')
@@ -359,8 +353,8 @@ export function PlayPage() {
       }
       if (full?.session.status === 'selecting_group') {
         setPhase('pick_group')
-        const gs = await listGroups(full.session.game_id, true)
-        setGroups(gs)
+        const gs = await listGroupsWithCounts(full.session.game_id, true)
+        setGroups(gs.filter((g) => (g.question_count || 0) > 0))
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'فشل المتابعة')
@@ -411,7 +405,6 @@ export function PlayPage() {
       }`}
     >
       <Confetti active={confetti} />
-
       <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 backdrop-blur-sm bg-black/20 z-10">
         <div>
           <p className="text-xs text-slate-400">عبقرينو</p>
@@ -438,9 +431,7 @@ export function PlayPage() {
       </header>
 
       {error && (
-        <div className="mx-4 mt-3 text-sm text-red-200 bg-red-900/50 px-4 py-2 rounded-xl fx-shake">
-          {error}
-        </div>
+        <div className="mx-4 mt-3 text-sm text-red-200 bg-red-900/50 px-4 py-2 rounded-xl fx-shake">{error}</div>
       )}
 
       <main className="flex-1 flex flex-col items-center justify-center p-6 max-w-3xl mx-auto w-full z-10">
@@ -468,11 +459,8 @@ export function PlayPage() {
 
         {showReadyAlone && (
           <div className="text-center space-y-6 fx-pop py-12">
-            <p className="text-5xl sm:text-6xl font-black text-amber-300 drop-shadow-lg tracking-wide">
-              You are ready!
-            </p>
+            <p className="text-5xl sm:text-6xl font-black text-amber-300 drop-shadow-lg tracking-wide">You are ready!</p>
             <p className="text-xl text-slate-300">{selectedPlayerName}</p>
-            <p className="text-sm text-slate-500">جاري تحميل المجالات…</p>
           </div>
         )}
 
@@ -500,14 +488,14 @@ export function PlayPage() {
                           : 'bg-slate-800/90 border-2 border-slate-500 hover:border-red-400 hover:scale-105 fx-btn')
                     }
                   >
-                    <span className="relative z-10">{g.name}</span>
+                    <span className="relative z-10">
+                      {g.name}
+                      {g.question_count != null ? ` (${g.question_count})` : ''}
+                    </span>
                     {isSel && (
                       <>
                         <span className="fx-ring absolute inset-[-8px] rounded-full border-2 border-red-400/50" />
                         <span className="fx-sparkle absolute -top-2 -right-2 text-2xl">✨</span>
-                        <span className="fx-sparkle absolute -bottom-1 -left-2 text-xl" style={{ animationDelay: '0.2s' }}>
-                          ⭐
-                        </span>
                       </>
                     )}
                   </button>
@@ -515,7 +503,9 @@ export function PlayPage() {
               })}
             </div>
             {groups.length === 0 && (
-              <p className="text-slate-400 text-sm">لا توجد مجموعات نشطة — أضفها من لوحة الإدارة</p>
+              <p className="text-amber-200 text-sm max-w-md mx-auto">
+                لا توجد مجالات فيها أسئلة نشطة. أضف أسئلة من لوحة الإدارة للمجالات (التاريخ / الفنون / الرياضة…).
+              </p>
             )}
           </div>
         )}
@@ -523,45 +513,28 @@ export function PlayPage() {
         {(status === 'question_active' || status === 'answer_reveal') && activeQuestion && (
           <div className="w-full space-y-6 fx-enter">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-400">
-                سؤال {(session.current_question_index || 0) + 1}
-              </span>
+              <span className="text-sm text-slate-400">سؤال {(session.current_question_index || 0) + 1}</span>
               {status === 'question_active' && (
-                <span
-                  className={`text-3xl font-mono font-black tabular-nums ${
-                    secondsLeft <= 5 ? 'fx-timer-urgent' : 'text-amber-300'
-                  }`}
-                >
+                <span className={`text-3xl font-mono font-black tabular-nums ${secondsLeft <= 5 ? 'fx-timer-urgent' : 'text-amber-300'}`}>
                   {secondsLeft}
                   <span className="text-base font-medium mr-1">ث</span>
                 </span>
               )}
             </div>
-
-            <h2 className="text-xl md:text-2xl font-bold leading-relaxed fx-pop">
-              {activeQuestion.question_text_snapshot}
-            </h2>
-
+            <h2 className="text-xl md:text-2xl font-bold leading-relaxed fx-pop">{activeQuestion.question_text_snapshot}</h2>
             {activeQuestion.media_url && activeQuestion.media_type === 'image' && (
-              <img
-                src={activeQuestion.media_url}
-                alt=""
-                className="max-h-56 mx-auto rounded-2xl border border-slate-600 object-contain fx-pop shadow-xl"
-              />
+              <img src={activeQuestion.media_url} alt="" className="max-h-56 mx-auto rounded-2xl border border-slate-600 object-contain fx-pop shadow-xl" />
             )}
             {activeQuestion.media_url && activeQuestion.media_type === 'audio' && (
               <audio controls src={activeQuestion.media_url} className="w-full fx-enter" />
             )}
-
             <div className="grid gap-3">
               {(activeQuestion.options_snapshot || []).map((opt, i) => {
                 const revealed = status === 'answer_reveal' || !!reveal
                 const isSelected = activeQuestion.selected_option_id === opt.id
                 const isCorrectOpt =
                   reveal?.correct_option_id === opt.id ||
-                  (showCorrect &&
-                    reveal?.correct_answer &&
-                    opt.option_text === reveal.correct_answer)
+                  (showCorrect && reveal?.correct_answer && opt.option_text === reveal.correct_answer)
                 return (
                   <button
                     key={opt.id}
@@ -581,36 +554,19 @@ export function PlayPage() {
                 )
               })}
             </div>
-
             {(status === 'answer_reveal' || reveal) && (
               <div className="bg-slate-800/90 rounded-2xl p-5 space-y-2 border border-white/10 fx-pop">
-                {reveal?.timed_out && (
-                  <p className="text-amber-300 font-bold text-lg">انتهى الوقت ⏱</p>
-                )}
+                {reveal?.timed_out && <p className="text-amber-300 font-bold text-lg">انتهى الوقت ⏱</p>}
                 {reveal && !reveal.timed_out && (
-                  <p
-                    className={
-                      reveal.is_correct
-                        ? 'text-green-400 font-black text-xl'
-                        : 'text-red-300 font-black text-xl'
-                    }
-                  >
-                    {reveal.is_correct
-                      ? `برافو! +${reveal.points_awarded || 0} ✨`
-                      : 'للأسف خطأ يا عبقرينو'}
+                  <p className={reveal.is_correct ? 'text-green-400 font-black text-xl' : 'text-red-300 font-black text-xl'}>
+                    {reveal.is_correct ? `برافو! +${reveal.points_awarded || 0} ✨` : 'للأسف خطأ يا عبقرينو'}
                   </p>
                 )}
                 {showCorrect && reveal?.correct_answer && (
                   <p className="text-sm text-slate-300">الإجابة الصحيحة: {reveal.correct_answer}</p>
                 )}
-                {showExplanation && reveal?.explanation && (
-                  <p className="text-sm text-slate-400">{reveal.explanation}</p>
-                )}
-                <button
-                  onClick={onNext}
-                  disabled={busy}
-                  className="fx-btn mt-3 px-8 py-3 bg-red-600 rounded-xl font-bold hover:bg-red-500 disabled:opacity-50"
-                >
+                {showExplanation && reveal?.explanation && <p className="text-sm text-slate-400">{reveal.explanation}</p>}
+                <button onClick={onNext} disabled={busy} className="fx-btn mt-3 px-8 py-3 bg-red-600 rounded-xl font-bold hover:bg-red-500 disabled:opacity-50">
                   التالي
                 </button>
               </div>
@@ -622,20 +578,7 @@ export function PlayPage() {
           <div className="text-center space-y-5 fx-pop">
             <h2 className="text-4xl font-black text-amber-300 drop-shadow-lg">انتهت الجولة 🎉</h2>
             <p className="text-2xl font-bold">النتيجة النهائية: {totalScore}</p>
-            <div className="space-y-2 text-sm text-slate-300">
-              {data.players.map((p) => {
-                const sc = data.scores.find((s) => s.session_player_id === p.id)
-                return (
-                  <div key={p.id} className="fx-enter">
-                    {p.display_name_snapshot}: {sc?.score ?? 0}
-                  </div>
-                )
-              })}
-            </div>
-            <Link
-              to="/admin/sessions/new"
-              className="fx-btn inline-block mt-4 px-8 py-3 bg-red-600 rounded-xl font-bold"
-            >
+            <Link to="/admin/sessions/new" className="fx-btn inline-block mt-4 px-8 py-3 bg-red-600 rounded-xl font-bold">
               جولة جديدة
             </Link>
           </div>
