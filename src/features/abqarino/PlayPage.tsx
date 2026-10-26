@@ -347,6 +347,17 @@ export function PlayPage() {
               {activeQuestion.question_text_snapshot}
             </h2>
 
+            {activeQuestion.media_url && activeQuestion.media_type === 'image' && (
+              <img
+                src={activeQuestion.media_url}
+                alt=""
+                className="max-h-56 mx-auto rounded-2xl border border-slate-600 object-contain"
+              />
+            )}
+            {activeQuestion.media_url && activeQuestion.media_type === 'audio' && (
+              <audio controls src={activeQuestion.media_url} className="w-full" />
+            )}
+
             <div className="grid gap-3">
               {(activeQuestion.options_snapshot || []).map((opt) => {
                 const revealed = status === 'answer_reveal' || !!reveal
