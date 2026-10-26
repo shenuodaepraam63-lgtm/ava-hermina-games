@@ -2,6 +2,8 @@
 
 @theme {
   --font-sans: "Segoe UI", "Tahoma", "Arial", "Helvetica Neue", sans-serif;
+  --color-brand: #dc2626;
+  --color-brand-dark: #b91c1c;
 }
 
 html {
@@ -17,4 +19,11 @@ body {
 
 #root {
   min-height: 100vh;
+}
+
+/* Brand focus ring */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
 }

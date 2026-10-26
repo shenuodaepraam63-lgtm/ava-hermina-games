@@ -4,6 +4,9 @@ import { LoginPage } from '../features/auth/LoginPage'
 import { AdminLayout } from '../features/admin/AdminLayout'
 import { AdminDashboard } from '../features/admin/AdminDashboard'
 import { PlayersPage } from '../features/admin/PlayersPage'
+import { GroupsPage } from '../features/admin/GroupsPage'
+import { QuestionsPage } from '../features/admin/QuestionsPage'
+import { SettingsPage } from '../features/admin/SettingsPage'
 
 export const router = createBrowserRouter([
   {
@@ -26,8 +29,20 @@ export const router = createBrowserRouter([
         path: 'players',
         element: <PlayersPage />,
       },
-      // More admin routes will be added later
+      {
+        path: 'groups',
+        element: <GroupsPage />,
+      },
+      {
+        path: 'questions',
+        element: <QuestionsPage />,
+      },
+      {
+        path: 'settings',
+        element: <SettingsPage />,
+      },
+      // Play / sessions routes will be added next
     ],
   },
-  // Play routes will be added later: /play/abqarino/:sessionId
+  // Play routes: /play/abqarino/:sessionId
 ])
