@@ -57,7 +57,6 @@ function tone(
 function speak(text: string, lang: string, rate = 0.95) {
   if (!enabled || typeof window === 'undefined' || !window.speechSynthesis) return
   try {
-    // لا تلغِ الكلام الجاري إلا بعد تأخير قصير لو فيه نغمة
     const u = new SpeechSynthesisUtterance(text)
     u.lang = lang
     u.rate = rate
@@ -163,7 +162,6 @@ export const sfx = {
     tone(900, 0.05, 'square', 0.03, 0.04)
   },
 
-  /** إجابة صحيحة — نغمة ثم «برافو!» بوضوح */
   correct() {
     unlockAudio()
     ;[523, 659, 784, 1046].forEach((f, i) => tone(f, 0.14, 'sine', 0.1, i * 0.09))
@@ -175,6 +173,16 @@ export const sfx = {
     tone(280, 0.18, 'sawtooth', 0.07, 0, 160)
     tone(200, 0.22, 'triangle', 0.05, 0.1)
     speakDelayed('للأسف خطأ يا عبقرينو', 'ar-SA', 400, 0.9)
+  },
+
+  /** خسارة اللاعب — نغمة حزينة */
+  playerLost(name?: string) {
+    unlockAudio()
+    tone(220, 0.35, 'sine', 0.08, 0, 110)
+    tone(165, 0.45, 'triangle', 0.07, 0.2, 90)
+    tone(130, 0.55, 'sine', 0.06, 0.4)
+    const msg = name ? `لقد خسر ${name}` : 'لقد خسرت'
+    speakDelayed(msg, 'ar-SA', 500, 0.85)
   },
 
   timeout() {
@@ -190,9 +198,12 @@ export const sfx = {
     tone(1175, 0.12, 'sine', 0.06, 0.06)
   },
 
-  win() {
+  win(name?: string) {
+    unlockAudio()
     const notes = [523, 659, 784, 1046, 784, 1046, 1319]
     notes.forEach((f, i) => tone(f, 0.18, 'sine', 0.085, i * 0.1))
+    const msg = name ? `الكاسب ${name}` : 'مبروك الفوز'
+    speakDelayed(msg, 'ar-SA', 800, 0.92)
   },
 
   transition() {
