@@ -4,7 +4,20 @@ import {
   getSettings,
   updateSettings,
   type AbqarinoSettings,
+  type DifficultySlot,
 } from '../../services/settings.service'
+
+const DEFAULT_PLAN: DifficultySlot[] = [
+  { difficulty: 'hard', count: 2 },
+  { difficulty: 'medium', count: 2 },
+  { difficulty: 'easy', count: 1 },
+]
+
+const DIFF_LABEL: Record<string, string> = {
+  hard: 'صعب',
+  medium: 'متوسط',
+  easy: 'سهل',
+}
 
 export function SettingsPage() {
   const [gameId, setGameId] = useState<string | null>(null)
@@ -20,9 +33,13 @@ export function SettingsPage() {
         const game = await getGameBySlug('abqarino')
         setGameId(game.id)
         const row = await getSettings(game.id)
-        setSettings(row.settings)
-      } catch (e: any) {
-        setError(e.message || 'فشل التحميل')
+        const s = row.settings
+        if (!s.difficulty_plan || s.difficulty_plan.length === 0) {
+          s.difficulty_plan = DEFAULT_PLAN
+        }
+        setSettings(s)
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'فشل التحميل')
       } finally {
         setLoading(false)
       }
@@ -32,6 +49,44 @@ export function SettingsPage() {
   function patch<K extends keyof AbqarinoSettings>(key: K, value: AbqarinoSettings[K]) {
     setSettings((s) => (s ? { ...s, [key]: value } : s))
     setOk(false)
+  }
+
+  function patchPlan(idx: number, field: 'difficulty' | 'count', value: string | number) {
+    setSettings((s) => {
+      if (!s) return s
+      const plan = [...(s.difficulty_plan || DEFAULT_PLAN)]
+      const row = { ...plan[idx] }
+      if (field === 'difficulty') row.difficulty = value as DifficultySlot['difficulty']
+      else row.count = Math.max(0, Number(value))
+      plan[idx] = row
+      const total = plan.reduce((a, x) => a + x.count, 0)
+      return { ...s, difficulty_plan: plan, questions_per_round: total }
+    })
+    setOk(false)
+  }
+
+  function addPlanRow() {
+    setSettings((s) => {
+      if (!s) return s
+      const plan = [...(s.difficulty_plan || []), { difficulty: 'medium' as const, count: 1 }]
+      return {
+        ...s,
+        difficulty_plan: plan,
+        questions_per_round: plan.reduce((a, x) => a + x.count, 0),
+      }
+    })
+  }
+
+  function removePlanRow(idx: number) {
+    setSettings((s) => {
+      if (!s) return s
+      const plan = (s.difficulty_plan || []).filter((_, i) => i !== idx)
+      return {
+        ...s,
+        difficulty_plan: plan.length ? plan : DEFAULT_PLAN,
+        questions_per_round: (plan.length ? plan : DEFAULT_PLAN).reduce((a, x) => a + x.count, 0),
+      }
+    })
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -44,8 +99,8 @@ export function SettingsPage() {
       const row = await updateSettings(gameId, settings)
       setSettings(row.settings)
       setOk(true)
-    } catch (e: any) {
-      setError(e.message || 'فشل الحفظ')
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'فشل الحفظ')
     } finally {
       setSaving(false)
     }
@@ -53,6 +108,9 @@ export function SettingsPage() {
 
   if (loading) return <p className="text-slate-500">جاري التحميل...</p>
   if (!settings) return <p className="text-red-600">{error || 'لا توجد إعدادات'}</p>
+
+  const plan = settings.difficulty_plan || DEFAULT_PLAN
+  const totalQ = plan.reduce((a, x) => a + x.count, 0)
 
   return (
     <div>
@@ -100,27 +158,53 @@ export function SettingsPage() {
           />
         </label>
 
-        <label className="block">
-          <span className="text-sm font-medium text-slate-700">عدد الأسئلة في الجولة</span>
-          <input
-            type="number"
-            min={1}
-            max={50}
-            value={settings.questions_per_round}
-            onChange={(e) => patch('questions_per_round', Number(e.target.value))}
-            className="mt-1 w-full px-4 py-2.5 border border-slate-300 rounded-xl"
-          />
-        </label>
-
-        <label className="flex items-center gap-3">
-          <input
-            type="checkbox"
-            checked={settings.shuffle_questions}
-            onChange={(e) => patch('shuffle_questions', e.target.checked)}
-            className="accent-red-600"
-          />
-          <span className="text-sm text-slate-700">خلط الأسئلة</span>
-        </label>
+        <div className="border border-slate-200 rounded-2xl p-4 space-y-3 bg-slate-50">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-bold text-slate-800">توزيع الصعوبة في الجولة</p>
+            <span className="text-xs text-slate-500">الإجمالي: {totalQ} سؤال</span>
+          </div>
+          <p className="text-xs text-slate-500">
+            الترتيب من فوق لتحت = ترتيب ظهور الأسئلة. الأسئلة لا تتكرر بين الجولات حتى تنفد ثم تُخلط من جديد.
+          </p>
+          {plan.map((row, idx) => (
+            <div key={idx} className="flex gap-2 items-center">
+              <select
+                value={row.difficulty}
+                onChange={(e) => patchPlan(idx, 'difficulty', e.target.value)}
+                className="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-sm"
+              >
+                <option value="hard">صعب</option>
+                <option value="medium">متوسط</option>
+                <option value="easy">سهل</option>
+              </select>
+              <input
+                type="number"
+                min={0}
+                max={30}
+                value={row.count}
+                onChange={(e) => patchPlan(idx, 'count', e.target.value)}
+                className="w-20 px-3 py-2 border border-slate-300 rounded-xl text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => removePlanRow(idx)}
+                className="text-xs text-red-600 px-2"
+              >
+                حذف
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addPlanRow}
+            className="text-sm text-red-600 font-medium"
+          >
+            + صف صعوبة
+          </button>
+          <p className="text-xs text-slate-400">
+            مثال: {plan.map((r) => `${r.count} ${DIFF_LABEL[r.difficulty]}`).join(' ثم ')}
+          </p>
+        </div>
 
         <label className="flex items-center gap-3">
           <input

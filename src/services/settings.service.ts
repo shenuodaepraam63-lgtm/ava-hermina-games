@@ -1,5 +1,10 @@
 import { supabase } from '../lib/supabase'
 
+export type DifficultySlot = {
+  difficulty: 'easy' | 'medium' | 'hard'
+  count: number
+}
+
 export type AbqarinoSettings = {
   question_time_seconds: number
   points_per_correct_answer: number
@@ -12,6 +17,8 @@ export type AbqarinoSettings = {
   enable_sound_effects: boolean
   default_difficulty: string
   selection_mode: string
+  /** ترتيب الصعوبة في الجولة: مثلاً 3 صعب ثم 3 سهل ثم 4 متوسط */
+  difficulty_plan?: DifficultySlot[]
 }
 
 export type GameSettingsRow = {
@@ -48,6 +55,11 @@ export async function updateSettings(gameId: string, settings: Partial<AbqarinoS
   }
   if (merged.winning_score <= 0) {
     throw new Error('نقاط الفوز يجب أن تكون أكبر من صفر')
+  }
+
+  // مزامنة questions_per_round مع مجموع difficulty_plan
+  if (merged.difficulty_plan && merged.difficulty_plan.length > 0) {
+    merged.questions_per_round = merged.difficulty_plan.reduce((s, x) => s + Math.max(0, x.count || 0), 0)
   }
 
   const { data, error } = await supabase
