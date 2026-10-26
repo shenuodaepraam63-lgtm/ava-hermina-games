@@ -12,6 +12,7 @@ import {
 } from '../../services/sessions.service'
 import { listGroups, type QuestionGroup } from '../../services/groups.service'
 import { PlayerWheel } from './PlayerWheel'
+import { Confetti } from './Confetti'
 import { setSoundEnabled, sfx } from '../../lib/sounds'
 
 function remainingSeconds(deadlineAt: string | null | undefined) {
@@ -37,7 +38,11 @@ export function PlayPage() {
     correct_option_id?: string
   } | null>(null)
   const [secondsLeft, setSecondsLeft] = useState(0)
+  const [flash, setFlash] = useState<'ok' | 'bad' | null>(null)
+  const [confetti, setConfetti] = useState(false)
+  const [scoreBump, setScoreBump] = useState(false)
   const timeoutFired = useRef(false)
+  const lastTickSec = useRef(-1)
 
   const settings = data?.session.settings_snapshot || {}
   const soundOn = settings.enable_sound_effects !== false
@@ -76,8 +81,8 @@ export function PlayPage() {
           const gs = await listGroups(full.session.game_id, true)
           setGroups(gs)
         }
-      } catch (e: any) {
-        setError(e.message || 'تعذر تحميل الجولة')
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'تعذر تحميل الجولة')
       } finally {
         setLoading(false)
       }
@@ -102,9 +107,18 @@ export function PlayPage() {
       return
     }
     timeoutFired.current = false
+    lastTickSec.current = -1
+    sfx.questionAppear()
     const tick = () => {
       const left = remainingSeconds(activeQuestion.deadline_at)
       setSecondsLeft(left)
+      if (left !== lastTickSec.current && left > 0 && left <= 5) {
+        lastTickSec.current = left
+        sfx.urgentTick()
+      } else if (left !== lastTickSec.current && left > 5 && left <= 10) {
+        lastTickSec.current = left
+        sfx.tick()
+      }
       if (left <= 0 && !timeoutFired.current && sessionId && activeQuestion) {
         timeoutFired.current = true
         ;(async () => {
@@ -116,22 +130,34 @@ export function PlayPage() {
               explanation: res.explanation as string,
               correct_option_id: res.correct_option_id as string,
             })
+            setFlash('bad')
             sfx.timeout()
             await reload()
           } catch {
-            /* deadline race */
+            /* race */
           }
         })()
       }
     }
     tick()
-    const id = window.setInterval(tick, 250)
+    const id = window.setInterval(tick, 200)
     return () => window.clearInterval(id)
   }, [data?.session.status, activeQuestion?.id, activeQuestion?.deadline_at, sessionId, reload])
 
   useEffect(() => {
-    if (data?.session.status === 'round_complete') sfx.win()
+    if (data?.session.status === 'round_complete') {
+      sfx.win()
+      setConfetti(true)
+      const t = window.setTimeout(() => setConfetti(false), 4500)
+      return () => window.clearTimeout(t)
+    }
   }, [data?.session.status])
+
+  useEffect(() => {
+    if (!flash) return
+    const t = window.setTimeout(() => setFlash(null), 700)
+    return () => window.clearTimeout(t)
+  }, [flash])
 
   const selectedPlayerName = useMemo(() => {
     if (!data?.session.selected_player_id) return null
@@ -164,15 +190,11 @@ export function PlayPage() {
     try {
       await selectPlayer(sessionId)
       await reload()
-      const gs = await listGroups(data?.session.game_id || '', true).catch(() => [])
-      if (gs.length) setGroups(gs)
-      else {
-        const full = await getFullSession(sessionId)
-        const g2 = await listGroups(full.session.game_id, true)
-        setGroups(g2)
-      }
-    } catch (e: any) {
-      setError(e.message || 'فشل اختيار اللاعب')
+      const full = await getFullSession(sessionId)
+      const g2 = await listGroups(full.session.game_id, true)
+      setGroups(g2)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'فشل اختيار اللاعب')
     } finally {
       setSpinning(false)
       setBusy(false)
@@ -184,12 +206,13 @@ export function PlayPage() {
     setBusy(true)
     setError(null)
     setReveal(null)
-    sfx.click()
+    sfx.groupSelect()
     try {
       await selectGroup(sessionId, groupId)
+      sfx.transition()
       await reload()
-    } catch (e: any) {
-      setError(e.message || 'فشل اختيار المجال — تأكد من وجود أسئلة نشطة')
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'فشل اختيار المجال')
     } finally {
       setBusy(false)
     }
@@ -199,6 +222,7 @@ export function PlayPage() {
     if (!sessionId || !activeQuestion || busy) return
     setBusy(true)
     setError(null)
+    sfx.uiTap()
     try {
       const key = `${sessionId}:${activeQuestion.id}:${optionId}:${Date.now()}`
       const res = await submitAnswer(sessionId, activeQuestion.id, optionId, key)
@@ -209,11 +233,21 @@ export function PlayPage() {
         points_awarded: res.points_awarded,
         correct_option_id: res.correct_option_id,
       })
-      if (res.is_correct) sfx.correct()
-      else sfx.wrong()
+      if (res.is_correct) {
+        sfx.correct()
+        sfx.points()
+        setFlash('ok')
+        setScoreBump(true)
+        setConfetti(true)
+        window.setTimeout(() => setConfetti(false), 2200)
+        window.setTimeout(() => setScoreBump(false), 500)
+      } else {
+        sfx.wrong()
+        setFlash('bad')
+      }
       await reload()
-    } catch (e: any) {
-      setError(e.message || 'فشل تسجيل الإجابة')
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'فشل تسجيل الإجابة')
     } finally {
       setBusy(false)
     }
@@ -224,6 +258,7 @@ export function PlayPage() {
     setBusy(true)
     setReveal(null)
     sfx.click()
+    sfx.whoosh()
     try {
       await advanceSession(sessionId)
       const full = await reload()
@@ -231,8 +266,8 @@ export function PlayPage() {
         const gs = await listGroups(full.session.game_id, true)
         setGroups(gs)
       }
-    } catch (e: any) {
-      setError(e.message || 'فشل المتابعة')
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'فشل المتابعة')
     } finally {
       setBusy(false)
     }
@@ -240,15 +275,15 @@ export function PlayPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
-        جاري استعادة الجولة...
+      <div className="min-h-screen flex items-center justify-center fx-stage-bg text-white">
+        <p className="fx-pop text-lg">جاري استعادة الجولة…</p>
       </div>
     )
   }
 
   if (error && !data) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 bg-slate-900 text-white">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 fx-stage-bg text-white">
         <p className="text-red-300">{error}</p>
         <Link to="/admin" className="text-sm underline">
           العودة للوحة التحكم
@@ -264,20 +299,28 @@ export function PlayPage() {
   const winningScore = Number(settings.winning_score) || 5
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex flex-col">
-      <header className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+    <div
+      className={`min-h-screen fx-stage-bg text-white flex flex-col relative overflow-hidden ${
+        flash === 'ok' ? 'fx-flash-ok' : flash === 'bad' ? 'fx-flash-bad' : ''
+      }`}
+    >
+      <Confetti active={confetti} />
+
+      <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 backdrop-blur-sm bg-black/20 z-10">
         <div>
           <p className="text-xs text-slate-400">عبقرينو</p>
-          <p className="font-bold text-lg">
+          <p className={`font-bold text-lg ${scoreBump ? 'fx-score-bump text-amber-300' : ''}`}>
             {selectedPlayerName || '—'} · {totalScore}/{winningScore}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => setSoundEnabled(!soundOn)}
-            className="text-xs text-slate-400 hover:text-white"
-            title="الصوت يُضبط أيضاً من إعدادات الأدمن"
+            onClick={() => {
+              setSoundEnabled(!soundOn)
+              sfx.unlock()
+            }}
+            className="text-sm text-slate-300 hover:text-white fx-btn px-2 py-1 rounded-lg"
           >
             {soundOn ? '🔊' : '🔇'}
           </button>
@@ -288,13 +331,15 @@ export function PlayPage() {
       </header>
 
       {error && (
-        <div className="mx-4 mt-3 text-sm text-red-200 bg-red-900/40 px-4 py-2 rounded-xl">{error}</div>
+        <div className="mx-4 mt-3 text-sm text-red-200 bg-red-900/50 px-4 py-2 rounded-xl fx-shake">
+          {error}
+        </div>
       )}
 
-      <main className="flex-1 flex flex-col items-center justify-center p-6 max-w-3xl mx-auto w-full">
+      <main className="flex-1 flex flex-col items-center justify-center p-6 max-w-3xl mx-auto w-full z-10">
         {(status === 'ready' || status === 'selecting_player') && (
           <div className="text-center space-y-4 w-full">
-            <h2 className="text-2xl font-bold">عجلة المخدومين</h2>
+            <h2 className="text-2xl font-black tracking-wide fx-enter">عجلة المخدومين</h2>
             <PlayerWheel
               players={wheelPlayers}
               selectedRosterId={session.selected_player_id}
@@ -306,15 +351,18 @@ export function PlayPage() {
         )}
 
         {status === 'selecting_group' && (
-          <div className="text-center space-y-6 w-full">
-            <h2 className="text-2xl font-bold">{selectedPlayerName} — اختر المجال</h2>
+          <div className="text-center space-y-6 w-full fx-enter">
+            <h2 className="text-2xl font-black">
+              <span className="text-amber-300">{selectedPlayerName}</span> — اختر المجال
+            </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {groups.map((g) => (
+              {groups.map((g, i) => (
                 <button
                   key={g.id}
                   onClick={() => onPickGroup(g.id)}
                   disabled={busy}
-                  className="p-5 rounded-2xl bg-slate-800 border border-slate-600 hover:border-red-500 text-lg font-semibold disabled:opacity-50"
+                  style={{ animationDelay: `${i * 0.06}s` }}
+                  className="fx-enter fx-btn p-5 rounded-2xl bg-slate-800/90 border border-slate-600 hover:border-red-500 text-lg font-bold disabled:opacity-50"
                 >
                   {g.name}
                 </button>
@@ -327,23 +375,24 @@ export function PlayPage() {
         )}
 
         {(status === 'question_active' || status === 'answer_reveal') && activeQuestion && (
-          <div className="w-full space-y-6">
+          <div className="w-full space-y-6 fx-enter">
             <div className="flex items-center justify-between">
               <span className="text-sm text-slate-400">
                 سؤال {(session.current_question_index || 0) + 1}
               </span>
               {status === 'question_active' && (
                 <span
-                  className={`text-2xl font-mono font-bold ${
-                    secondsLeft <= 5 ? 'text-red-400' : 'text-amber-300'
+                  className={`text-3xl font-mono font-black tabular-nums ${
+                    secondsLeft <= 5 ? 'fx-timer-urgent' : 'text-amber-300'
                   }`}
                 >
-                  {secondsLeft}ث
+                  {secondsLeft}
+                  <span className="text-base font-medium mr-1">ث</span>
                 </span>
               )}
             </div>
 
-            <h2 className="text-xl md:text-2xl font-bold leading-relaxed">
+            <h2 className="text-xl md:text-2xl font-bold leading-relaxed fx-pop">
               {activeQuestion.question_text_snapshot}
             </h2>
 
@@ -351,15 +400,15 @@ export function PlayPage() {
               <img
                 src={activeQuestion.media_url}
                 alt=""
-                className="max-h-56 mx-auto rounded-2xl border border-slate-600 object-contain"
+                className="max-h-56 mx-auto rounded-2xl border border-slate-600 object-contain fx-pop shadow-xl"
               />
             )}
             {activeQuestion.media_url && activeQuestion.media_type === 'audio' && (
-              <audio controls src={activeQuestion.media_url} className="w-full" />
+              <audio controls src={activeQuestion.media_url} className="w-full fx-enter" />
             )}
 
             <div className="grid gap-3">
-              {(activeQuestion.options_snapshot || []).map((opt) => {
+              {(activeQuestion.options_snapshot || []).map((opt, i) => {
                 const revealed = status === 'answer_reveal' || !!reveal
                 const isSelected = activeQuestion.selected_option_id === opt.id
                 const isCorrectOpt =
@@ -372,12 +421,13 @@ export function PlayPage() {
                     key={opt.id}
                     disabled={busy || revealed || status !== 'question_active'}
                     onClick={() => onAnswer(opt.id)}
-                    className={`text-right px-4 py-3 rounded-xl border text-base transition ${
+                    style={{ animationDelay: `${i * 0.05}s` }}
+                    className={`fx-enter fx-option text-right px-4 py-3.5 rounded-xl border text-base ${
                       revealed && isCorrectOpt && showCorrect
-                        ? 'bg-green-700 border-green-500'
+                        ? 'bg-green-600/90 border-green-400 fx-pop'
                         : revealed && isSelected && !reveal?.is_correct
-                          ? 'bg-red-800 border-red-500'
-                          : 'bg-slate-800 border-slate-600 hover:border-red-400'
+                          ? 'bg-red-800/90 border-red-500 fx-shake'
+                          : 'bg-slate-800/90 border-slate-600'
                     } disabled:opacity-80`}
                   >
                     {opt.option_text}
@@ -387,16 +437,20 @@ export function PlayPage() {
             </div>
 
             {(status === 'answer_reveal' || reveal) && (
-              <div className="bg-slate-800/80 rounded-2xl p-4 space-y-2">
-                {reveal?.timed_out && <p className="text-amber-300 font-medium">انتهى الوقت</p>}
+              <div className="bg-slate-800/90 rounded-2xl p-5 space-y-2 border border-white/10 fx-pop">
+                {reveal?.timed_out && (
+                  <p className="text-amber-300 font-bold text-lg">انتهى الوقت ⏱</p>
+                )}
                 {reveal && !reveal.timed_out && (
                   <p
                     className={
-                      reveal.is_correct ? 'text-green-400 font-bold' : 'text-red-300 font-bold'
+                      reveal.is_correct
+                        ? 'text-green-400 font-black text-xl'
+                        : 'text-red-300 font-black text-xl'
                     }
                   >
                     {reveal.is_correct
-                      ? `إجابة صحيحة! +${reveal.points_awarded || 0}`
+                      ? `إجابة صحيحة! +${reveal.points_awarded || 0} ✨`
                       : 'إجابة خاطئة'}
                   </p>
                 )}
@@ -409,7 +463,7 @@ export function PlayPage() {
                 <button
                   onClick={onNext}
                   disabled={busy}
-                  className="mt-2 px-6 py-2.5 bg-red-600 rounded-xl font-medium hover:bg-red-500 disabled:opacity-50"
+                  className="fx-btn mt-3 px-8 py-3 bg-red-600 rounded-xl font-bold hover:bg-red-500 disabled:opacity-50"
                 >
                   التالي
                 </button>
@@ -419,14 +473,14 @@ export function PlayPage() {
         )}
 
         {status === 'round_complete' && (
-          <div className="text-center space-y-4">
-            <h2 className="text-3xl font-bold text-amber-300">انتهت الجولة 🎉</h2>
-            <p className="text-xl">النتيجة النهائية: {totalScore}</p>
+          <div className="text-center space-y-5 fx-pop">
+            <h2 className="text-4xl font-black text-amber-300 drop-shadow-lg">انتهت الجولة 🎉</h2>
+            <p className="text-2xl font-bold">النتيجة النهائية: {totalScore}</p>
             <div className="space-y-2 text-sm text-slate-300">
               {data.players.map((p) => {
                 const sc = data.scores.find((s) => s.session_player_id === p.id)
                 return (
-                  <div key={p.id}>
+                  <div key={p.id} className="fx-enter">
                     {p.display_name_snapshot}: {sc?.score ?? 0}
                   </div>
                 )
@@ -434,7 +488,7 @@ export function PlayPage() {
             </div>
             <Link
               to="/admin/sessions/new"
-              className="inline-block mt-4 px-6 py-3 bg-red-600 rounded-xl font-medium"
+              className="fx-btn inline-block mt-4 px-8 py-3 bg-red-600 rounded-xl font-bold"
             >
               جولة جديدة
             </Link>

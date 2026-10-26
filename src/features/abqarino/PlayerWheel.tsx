@@ -8,7 +8,6 @@ export type WheelPlayer = {
 
 type Props = {
   players: WheelPlayer[]
-  /** Roster player id selected by server after spin completes */
   selectedRosterId: string | null
   spinning: boolean
   onSpinRequest: () => void
@@ -22,15 +21,17 @@ const COLORS = [
   '#7f1d1d',
   '#ef4444',
   '#f87171',
-  '#450a0a',
   '#9f1239',
+  '#be123c',
 ]
 
 export function PlayerWheel({ players, selectedRosterId, spinning, onSpinRequest, disabled }: Props) {
   const [rotation, setRotation] = useState(0)
   const [animating, setAnimating] = useState(false)
+  const [landed, setLanded] = useState(false)
   const tickRef = useRef<number | null>(null)
   const prevSpinning = useRef(false)
+  const angleRef = useRef(0)
 
   const n = Math.max(players.length, 1)
   const slice = 360 / n
@@ -40,38 +41,40 @@ export function PlayerWheel({ players, selectedRosterId, spinning, onSpinRequest
     return players.findIndex((p) => p.id === selectedRosterId)
   }, [players, selectedRosterId])
 
-  // When server returns selection while we requested spin, animate to that slice
   useEffect(() => {
     if (spinning && !prevSpinning.current) {
       setAnimating(true)
-      // temporary continuous spin while waiting for server
-      let angle = rotation
+      setLanded(false)
+      sfx.spinStart()
+      let speed = 36
       const id = window.setInterval(() => {
-        angle += 28
-        setRotation(angle)
+        angleRef.current += speed
+        setRotation(angleRef.current)
         sfx.spinTick()
-      }, 50)
+      }, 40)
       tickRef.current = id
     }
+
     if (!spinning && prevSpinning.current && selectedIndex >= 0) {
       if (tickRef.current) {
         window.clearInterval(tickRef.current)
         tickRef.current = null
       }
-      // Pointer at top ( -90deg visual with CSS). Land so selected slice center is at top.
       const targetSliceCenter = selectedIndex * slice + slice / 2
-      const extraTurns = 4 + Math.floor(Math.random() * 2)
-      const finalRotation = extraTurns * 360 + (360 - targetSliceCenter)
+      const extraTurns = 5 + Math.floor(Math.random() * 2)
+      const finalRotation = angleRef.current + extraTurns * 360 + ((360 - targetSliceCenter - (angleRef.current % 360) + 360) % 360)
+      angleRef.current = finalRotation
       setRotation(finalRotation)
       setAnimating(true)
       const t = window.setTimeout(() => {
         setAnimating(false)
+        setLanded(true)
         sfx.spinEnd()
-      }, 2800)
+      }, 3200)
       return () => window.clearTimeout(t)
     }
     prevSpinning.current = spinning
-  }, [spinning, selectedIndex, slice, rotation])
+  }, [spinning, selectedIndex, slice])
 
   useEffect(() => {
     return () => {
@@ -90,18 +93,27 @@ export function PlayerWheel({ players, selectedRosterId, spinning, onSpinRequest
     return `conic-gradient(from -90deg, ${parts.join(', ')})`
   }, [players, slice])
 
+  const busy = spinning || animating
+
   return (
-    <div className="flex flex-col items-center gap-6">
-      <div className="relative w-64 h-64 sm:w-80 sm:h-80">
-        {/* pointer */}
-        <div className="absolute left-1/2 -translate-x-1/2 -top-1 z-20 w-0 h-0 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-amber-400 drop-shadow" />
+    <div className="flex flex-col items-center gap-6 fx-enter">
+      <div className={`relative w-72 h-72 sm:w-88 sm:h-88 ${busy ? 'fx-wheel-glow' : ''}`}>
+        <div className="absolute left-1/2 -translate-x-1/2 -top-2 z-20 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]">
+          <div className="w-0 h-0 border-l-[14px] border-r-[14px] border-t-[24px] border-l-transparent border-r-transparent border-t-amber-400" />
+        </div>
 
         <div
-          className="w-full h-full rounded-full border-4 border-amber-400 shadow-2xl relative overflow-hidden"
+          className={`absolute inset-0 rounded-full border-[5px] border-amber-400/90 shadow-[0_0_40px_rgba(220,38,38,0.35)] overflow-hidden ${
+            landed ? 'fx-pop' : ''
+          }`}
           style={{
             background: gradient,
             transform: `rotate(${rotation}deg)`,
-            transition: animating && !spinning ? 'transform 2.8s cubic-bezier(0.12, 0.75, 0.08, 1)' : undefined,
+            transition:
+              animating && !spinning
+                ? 'transform 3.2s cubic-bezier(0.08, 0.85, 0.12, 1)'
+                : undefined,
+            filter: spinning ? 'brightness(1.1)' : undefined,
           }}
         >
           {players.map((p, i) => {
@@ -111,34 +123,38 @@ export function PlayerWheel({ players, selectedRosterId, spinning, onSpinRequest
                 key={p.id}
                 className="absolute left-1/2 top-1/2 origin-left text-[10px] sm:text-xs font-bold text-white whitespace-nowrap pointer-events-none"
                 style={{
-                  transform: `rotate(${angle}deg) translate(42px, -50%)`,
-                  width: '38%',
-                  textShadow: '0 1px 2px rgba(0,0,0,0.6)',
+                  transform: `rotate(${angle}deg) translate(48px, -50%)`,
+                  width: '36%',
+                  textShadow: '0 1px 3px rgba(0,0,0,0.75)',
                 }}
               >
-                {p.name.length > 12 ? p.name.slice(0, 11) + '…' : p.name}
+                {p.name.length > 11 ? p.name.slice(0, 10) + '…' : p.name}
               </div>
             )
           })}
-          <div className="absolute inset-[38%] rounded-full bg-slate-900 border-2 border-amber-500 flex items-center justify-center text-xs text-slate-400">
-            AH
+          <div className="absolute inset-[36%] rounded-full bg-slate-950 border-2 border-amber-400/80 flex items-center justify-center">
+            <span className="text-amber-300 font-black text-sm tracking-wide">AH</span>
           </div>
         </div>
       </div>
 
-      {selectedRosterId && !spinning && !animating && (
-        <p className="text-xl font-bold text-amber-300">
+      {selectedRosterId && !busy && (
+        <p className="text-2xl font-black text-amber-300 fx-pop drop-shadow">
           {players.find((p) => p.id === selectedRosterId)?.name}
         </p>
       )}
 
       <button
         type="button"
-        onClick={onSpinRequest}
-        disabled={disabled || spinning || animating || players.length === 0}
-        className="px-10 py-4 bg-red-600 hover:bg-red-500 rounded-2xl text-xl font-bold disabled:opacity-50 transition"
+        onClick={() => {
+          sfx.unlock()
+          sfx.uiTap()
+          onSpinRequest()
+        }}
+        disabled={disabled || busy || players.length === 0}
+        className="fx-btn px-12 py-4 bg-red-600 hover:bg-red-500 rounded-2xl text-xl font-black disabled:opacity-50"
       >
-        {spinning || animating ? 'تدور...' : 'لف العجلة'}
+        {busy ? 'تدور…' : 'لف العجلة'}
       </button>
     </div>
   )
