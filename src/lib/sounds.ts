@@ -1,4 +1,4 @@
-/** Web Audio SFX — no external files. Controlled by enable_sound_effects. */
+/** Web Audio + Speech Synthesis SFX */
 
 let ctx: AudioContext | null = null
 let enabled = true
@@ -6,7 +6,9 @@ let enabled = true
 function getCtx() {
   if (typeof window === 'undefined') return null
   if (!ctx) {
-    const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    const AC =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
     if (!AC) return null
     ctx = new AC()
   }
@@ -52,19 +54,31 @@ function tone(
   osc.stop(t0 + duration + 0.03)
 }
 
-/** Spoken line via Web Speech API when available */
-function speak(text: string, lang = 'en-US') {
+function speak(text: string, lang: string, rate = 0.95) {
   if (!enabled || typeof window === 'undefined' || !window.speechSynthesis) return
   try {
     window.speechSynthesis.cancel()
     const u = new SpeechSynthesisUtterance(text)
     u.lang = lang
-    u.rate = 0.95
+    u.rate = rate
     u.pitch = 1.05
     u.volume = 1
+    // Prefer matching voice when available
+    const voices = window.speechSynthesis.getVoices()
+    const match = voices.find((v) => v.lang.toLowerCase().startsWith(lang.slice(0, 2).toLowerCase()))
+    if (match) u.voice = match
     window.speechSynthesis.speak(u)
   } catch {
     /* ignore */
+  }
+}
+
+/** Ensure voices list is loaded (Chrome loads async) */
+export function warmSpeech() {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return
+  window.speechSynthesis.getVoices()
+  window.speechSynthesis.onvoiceschanged = () => {
+    window.speechSynthesis.getVoices()
   }
 }
 
@@ -98,18 +112,24 @@ export const sfx = {
     tone(880, 0.2, 'sine', 0.07, 0.16)
   },
 
-  /** احتفال ظهور اسم اللاعب */
   nameReveal() {
     ;[523, 659, 784, 1046, 1319].forEach((f, i) => tone(f, 0.16, 'sine', 0.1, i * 0.08))
     tone(1568, 0.25, 'triangle', 0.07, 0.42)
   },
 
-  /** You are ready — نغمة + كلام */
+  /** صوت كل ثانية في العدّاد */
+  secondTick(n?: number) {
+    tone(1000, 0.05, 'square', 0.04)
+    if (n != null && n >= 1 && n <= 5) {
+      speak(String(n), 'en-US', 1.1)
+    }
+  },
+
   youAreReady() {
     tone(440, 0.12, 'sine', 0.08)
     tone(554, 0.12, 'sine', 0.08, 0.1)
-    tone(659, 0.2, 'sine', 0.09, 0.2)
-    speak('You are ready!', 'en-US')
+    tone(659, 0.22, 'sine', 0.09, 0.2)
+    speak('You are ready!', 'en-US', 0.92)
   },
 
   groupSelect() {
@@ -131,19 +151,25 @@ export const sfx = {
     tone(900, 0.05, 'square', 0.03, 0.04)
   },
 
+  /** إجابة صحيحة */
   correct() {
     ;[523, 659, 784, 1046].forEach((f, i) => tone(f, 0.14, 'sine', 0.09, i * 0.09))
+    // تأخير بسيط عشان النغمة تخلص قبل الكلام
+    window.setTimeout(() => speak('برافو!', 'ar-EG', 0.95), 350)
   },
 
+  /** إجابة خاطئة */
   wrong() {
     tone(280, 0.18, 'sawtooth', 0.07, 0, 160)
     tone(200, 0.22, 'triangle', 0.05, 0.1)
+    window.setTimeout(() => speak('للأسف خطأ يا عبقرينو', 'ar-EG', 0.92), 280)
   },
 
   timeout() {
     tone(360, 0.12, 'triangle', 0.06)
     tone(280, 0.15, 'triangle', 0.05, 0.1)
     tone(220, 0.2, 'sine', 0.04, 0.2)
+    window.setTimeout(() => speak('للأسف انتهى الوقت يا عبقرينو', 'ar-EG', 0.92), 300)
   },
 
   points() {

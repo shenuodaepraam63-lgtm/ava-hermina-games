@@ -13,7 +13,7 @@ import {
 import { listGroups, type QuestionGroup } from '../../services/groups.service'
 import { PlayerWheel } from './PlayerWheel'
 import { Confetti } from './Confetti'
-import { setSoundEnabled, sfx } from '../../lib/sounds'
+import { setSoundEnabled, sfx, warmSpeech } from '../../lib/sounds'
 
 function remainingSeconds(deadlineAt: string | null | undefined) {
   if (!deadlineAt) return 0
@@ -21,7 +21,6 @@ function remainingSeconds(deadlineAt: string | null | undefined) {
   return Math.max(0, Math.ceil(ms / 1000))
 }
 
-/** مراحل ما بعد العجلة قبل اختيار المجال */
 type PostSpinPhase = 'idle' | 'celebrate' | 'you_are_ready' | 'pick_group'
 
 export function PlayPage() {
@@ -57,6 +56,7 @@ export function PlayPage() {
 
   useEffect(() => {
     setSoundEnabled(!!soundOn)
+    warmSpeech()
   }, [soundOn])
 
   const clearPostSpinTimers = () => {
@@ -84,7 +84,6 @@ export function PlayPage() {
         } catch {
           /* ignore */
         }
-        // استعادة بعد Refresh: لو الجلسة بالفعل selecting_group نعرض المجالات مباشرة
         if (full.session.status === 'selecting_group') {
           setPostSpin('pick_group')
           const gs = await listGroups(full.session.game_id, true)
@@ -195,38 +194,46 @@ export function PlayPage() {
     [data]
   )
 
-  /** بعد توقف العجلة: احتفال → انتظار 5 ث → You are ready → اختيار المجال */
-  const onWheelLanded = useCallback(
-    (_name: string) => {
-      clearPostSpinTimers()
-      setPostSpin('celebrate')
-      setConfetti(true)
-      setCountdown(5)
-      sfx.nameReveal()
+  /**
+   * بعد توقف العجلة:
+   * 1) احتفال بالاسم + confetti + صوت
+   * 2) عداد 5 ثوانٍ بصوت كل ثانية
+   * 3) شاشة You are ready لوحدها + صوت
+   * 4) اختيار المجال
+   */
+  const onWheelLanded = useCallback((_name: string) => {
+    clearPostSpinTimers()
+    setPostSpin('celebrate')
+    setConfetti(true)
+    setCountdown(5)
+    sfx.nameReveal()
+    // صوت للثانية 5 فورًا
+    window.setTimeout(() => sfx.secondTick(5), 400)
 
-      // عداد 5 ثوانٍ مرئي
-      for (let s = 4; s >= 1; s--) {
-        const tid = window.setTimeout(() => setCountdown(s), (5 - s) * 1000)
-        postSpinTimers.current.push(tid)
-      }
+    for (let s = 4; s >= 1; s--) {
+      const delay = (5 - s) * 1000
+      const tid = window.setTimeout(() => {
+        setCountdown(s)
+        sfx.secondTick(s)
+      }, delay)
+      postSpinTimers.current.push(tid)
+    }
 
-      // بعد 5 ثوانٍ: You are ready
-      const tReady = window.setTimeout(() => {
-        setPostSpin('you_are_ready')
-        setConfetti(false)
-        sfx.youAreReady()
-      }, 5000)
-      postSpinTimers.current.push(tReady)
+    // بعد 5 ثوانٍ: شاشة You are ready لوحدها
+    const tReady = window.setTimeout(() => {
+      setPostSpin('you_are_ready')
+      setConfetti(false)
+      sfx.youAreReady()
+    }, 5000)
+    postSpinTimers.current.push(tReady)
 
-      // بعد ثانية ونص من You are ready: اختيار المجال
-      const tGroups = window.setTimeout(() => {
-        setPostSpin('pick_group')
-        sfx.transition()
-      }, 5000 + 1800)
-      postSpinTimers.current.push(tGroups)
-    },
-    []
-  )
+    // بعد انتهاء النطق تقريبًا: المجالات
+    const tGroups = window.setTimeout(() => {
+      setPostSpin('pick_group')
+      sfx.transition()
+    }, 5000 + 2800)
+    postSpinTimers.current.push(tGroups)
+  }, [])
 
   async function onSpin() {
     if (!sessionId || busy || spinning) return
@@ -284,7 +291,7 @@ export function PlayPage() {
         correct_option_id: res.correct_option_id,
       })
       if (res.is_correct) {
-        sfx.correct()
+        sfx.correct() // نغمة + «برافو!»
         sfx.points()
         setFlash('ok')
         setScoreBump(true)
@@ -292,7 +299,7 @@ export function PlayPage() {
         window.setTimeout(() => setConfetti(false), 2200)
         window.setTimeout(() => setScoreBump(false), 500)
       } else {
-        sfx.wrong()
+        sfx.wrong() // نغمة + «للأسف خطأ يا عبقرينو»
         setFlash('bad')
       }
       await reload()
@@ -317,7 +324,6 @@ export function PlayPage() {
         setPostSpin('idle')
       }
       if (full?.session.status === 'selecting_group') {
-        // لو رجعنا لمجال بدون عجلة (نادر) نعرض مباشرة
         setPostSpin('pick_group')
         const gs = await listGroups(full.session.game_id, true)
         setGroups(gs)
@@ -354,11 +360,12 @@ export function PlayPage() {
   const status = session.status
   const winningScore = Number(settings.winning_score) || 5
 
-  const showWheelStage =
+  const showWheel =
     status === 'ready' ||
     status === 'selecting_player' ||
-    (status === 'selecting_group' && postSpin !== 'pick_group')
+    (status === 'selecting_group' && postSpin === 'celebrate')
 
+  const showReadyAlone = status === 'selecting_group' && postSpin === 'you_are_ready'
   const showGroupPicker = status === 'selecting_group' && postSpin === 'pick_group'
 
   return (
@@ -382,6 +389,7 @@ export function PlayPage() {
             onClick={() => {
               setSoundEnabled(!soundOn)
               sfx.unlock()
+              warmSpeech()
             }}
             className="text-sm text-slate-300 hover:text-white fx-btn px-2 py-1 rounded-lg"
           >
@@ -400,7 +408,7 @@ export function PlayPage() {
       )}
 
       <main className="flex-1 flex flex-col items-center justify-center p-6 max-w-3xl mx-auto w-full z-10">
-        {showWheelStage && (
+        {showWheel && (
           <div className="text-center space-y-5 w-full">
             <h2 className="text-2xl font-black tracking-wide fx-enter">عجلة المخدومين</h2>
             <PlayerWheel
@@ -410,25 +418,27 @@ export function PlayPage() {
               onSpinRequest={onSpin}
               onLanded={onWheelLanded}
               disabled={busy}
-              hideSpinButton={postSpin === 'celebrate' || postSpin === 'you_are_ready'}
+              hideSpinButton={postSpin === 'celebrate'}
             />
 
             {postSpin === 'celebrate' && (
               <div className="fx-pop space-y-3">
                 <p className="text-xl text-amber-200 font-bold">🎉 مبروك! تم اختيار اللاعب</p>
-                <p className="text-5xl font-black text-white tabular-nums">{countdown}</p>
+                <p className="text-6xl font-black text-white tabular-nums drop-shadow">{countdown}</p>
                 <p className="text-sm text-slate-400">استعد…</p>
               </div>
             )}
+          </div>
+        )}
 
-            {postSpin === 'you_are_ready' && (
-              <div className="fx-pop space-y-2 py-4">
-                <p className="text-4xl sm:text-5xl font-black text-amber-300 drop-shadow-lg tracking-wide">
-                  You are ready!
-                </p>
-                <p className="text-lg text-slate-300">جاهز لاختيار المجال</p>
-              </div>
-            )}
+        {/* شاشة You are ready لوحدها بالكامل */}
+        {showReadyAlone && (
+          <div className="text-center space-y-6 fx-pop py-12">
+            <p className="text-5xl sm:text-6xl font-black text-amber-300 drop-shadow-lg tracking-wide">
+              You are ready!
+            </p>
+            <p className="text-xl text-slate-300">{selectedPlayerName}</p>
+            <p className="text-sm text-slate-500">جاري تحميل المجالات…</p>
           </div>
         )}
 
@@ -532,8 +542,8 @@ export function PlayPage() {
                     }
                   >
                     {reveal.is_correct
-                      ? `إجابة صحيحة! +${reveal.points_awarded || 0} ✨`
-                      : 'إجابة خاطئة'}
+                      ? `برافو! +${reveal.points_awarded || 0} ✨`
+                      : 'للأسف خطأ يا عبقرينو'}
                   </p>
                 )}
                 {showCorrect && reveal?.correct_answer && (
