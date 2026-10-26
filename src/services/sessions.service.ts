@@ -66,7 +66,6 @@ export type FullSession = {
 
 function rpcErrorMessage(error: { message?: string; details?: string; hint?: string }) {
   const raw = error.details || error.message || 'حدث خطأ'
-  // Postgres RAISE EXCEPTION appears in message like: ...
   return raw.replace(/^.*exception:\s*/i, '').trim() || raw
 }
 
@@ -135,6 +134,8 @@ export async function submitAnswer(
     points_awarded?: number
     score?: number
     round_complete?: boolean
+    player_lost?: boolean
+    player_name?: string
     correct_option_id?: string
     correct_answer?: string
     explanation?: string
