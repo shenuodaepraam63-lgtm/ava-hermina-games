@@ -21,7 +21,8 @@ function remainingSeconds(deadlineAt: string | null | undefined) {
   return Math.max(0, Math.ceil(ms / 1000))
 }
 
-type PostSpinPhase = 'idle' | 'celebrate' | 'you_are_ready' | 'pick_group'
+/** spinning = أثناء اللف / التوقف حتى onLanded */
+type PostSpinPhase = 'idle' | 'spinning' | 'celebrate' | 'you_are_ready' | 'pick_group'
 
 export function PlayPage() {
   const { sessionId } = useParams<{ sessionId: string }>()
@@ -32,6 +33,7 @@ export function PlayPage() {
   const [busy, setBusy] = useState(false)
   const [spinning, setSpinning] = useState(false)
   const [postSpin, setPostSpin] = useState<PostSpinPhase>('idle')
+  const postSpinRef = useRef<PostSpinPhase>('idle')
   const [countdown, setCountdown] = useState(5)
   const [reveal, setReveal] = useState<{
     is_correct?: boolean
@@ -48,6 +50,11 @@ export function PlayPage() {
   const timeoutFired = useRef(false)
   const lastTickSec = useRef(-1)
   const postSpinTimers = useRef<number[]>([])
+
+  const setPhase = useCallback((p: PostSpinPhase) => {
+    postSpinRef.current = p
+    setPostSpin(p)
+  }, [])
 
   const settings = data?.session.settings_snapshot || {}
   const soundOn = settings.enable_sound_effects !== false
@@ -85,11 +92,11 @@ export function PlayPage() {
           /* ignore */
         }
         if (full.session.status === 'selecting_group') {
-          setPostSpin('pick_group')
+          setPhase('pick_group')
           const gs = await listGroups(full.session.game_id, true)
           setGroups(gs)
         } else if (full.session.status === 'ready' || full.session.status === 'selecting_player') {
-          setPostSpin('idle')
+          setPhase('idle')
           const gs = await listGroups(full.session.game_id, true)
           setGroups(gs)
         }
@@ -100,7 +107,7 @@ export function PlayPage() {
       }
     })()
     return () => clearPostSpinTimers()
-  }, [sessionId])
+  }, [sessionId, setPhase])
 
   const activeQuestion: SessionQuestion | undefined = useMemo(() => {
     if (!data) return undefined
@@ -194,67 +201,91 @@ export function PlayPage() {
     [data]
   )
 
-  /**
-   * بعد توقف العجلة:
-   * 1) احتفال بالاسم + confetti + صوت
-   * 2) عداد 5 ثوانٍ بصوت كل ثانية
-   * 3) شاشة You are ready لوحدها + صوت
-   * 4) اختيار المجال
-   */
-  const onWheelLanded = useCallback((_name: string) => {
-    clearPostSpinTimers()
-    setPostSpin('celebrate')
-    setConfetti(true)
-    setCountdown(5)
-    sfx.nameReveal()
-    // صوت للثانية 5 فورًا
-    window.setTimeout(() => sfx.secondTick(5), 400)
+  const startCelebrateSequence = useCallback(
+    (name: string) => {
+      // منع التكرار
+      if (postSpinRef.current === 'celebrate' || postSpinRef.current === 'you_are_ready' || postSpinRef.current === 'pick_group') {
+        if (postSpinRef.current === 'spinning') {
+          /* continue */
+        } else if (postSpinRef.current !== 'spinning') {
+          // already past celebrate start from another path — only skip if already past spinning
+        }
+      }
+      if (postSpinRef.current === 'celebrate' || postSpinRef.current === 'you_are_ready') return
+      if (postSpinRef.current === 'pick_group') return
 
-    for (let s = 4; s >= 1; s--) {
-      const delay = (5 - s) * 1000
-      const tid = window.setTimeout(() => {
-        setCountdown(s)
-        sfx.secondTick(s)
-      }, delay)
-      postSpinTimers.current.push(tid)
-    }
+      clearPostSpinTimers()
+      setPhase('celebrate')
+      setConfetti(true)
+      setCountdown(5)
+      sfx.nameReveal()
+      window.setTimeout(() => sfx.secondTick(5), 400)
 
-    // بعد 5 ثوانٍ: شاشة You are ready لوحدها
-    const tReady = window.setTimeout(() => {
-      setPostSpin('you_are_ready')
-      setConfetti(false)
-      sfx.youAreReady()
-    }, 5000)
-    postSpinTimers.current.push(tReady)
+      for (let s = 4; s >= 1; s--) {
+        const delay = (5 - s) * 1000
+        const tid = window.setTimeout(() => {
+          setCountdown(s)
+          sfx.secondTick(s)
+        }, delay)
+        postSpinTimers.current.push(tid)
+      }
 
-    // بعد انتهاء النطق تقريبًا: المجالات
-    const tGroups = window.setTimeout(() => {
-      setPostSpin('pick_group')
-      sfx.transition()
-    }, 5000 + 2800)
-    postSpinTimers.current.push(tGroups)
-  }, [])
+      const tReady = window.setTimeout(() => {
+        setPhase('you_are_ready')
+        setConfetti(false)
+        sfx.youAreReady()
+      }, 5000)
+      postSpinTimers.current.push(tReady)
+
+      const tGroups = window.setTimeout(() => {
+        setPhase('pick_group')
+        sfx.transition()
+      }, 5000 + 2800)
+      postSpinTimers.current.push(tGroups)
+
+      void name
+    },
+    [setPhase]
+  )
+
+  const onWheelLanded = useCallback(
+    (name: string) => {
+      startCelebrateSequence(name)
+    },
+    [startCelebrateSequence]
+  )
 
   async function onSpin() {
     if (!sessionId || busy || spinning) return
     setBusy(true)
     setSpinning(true)
+    setPhase('spinning') // مهم: تفضل العجلة ظاهرة
     setError(null)
     setReveal(null)
-    setPostSpin('idle')
     clearPostSpinTimers()
     try {
       await selectPlayer(sessionId)
-      await reload()
-      const full = await getFullSession(sessionId)
-      const g2 = await listGroups(full.session.game_id, true)
-      setGroups(g2)
+      const full = await reload()
+      if (full) {
+        const g2 = await listGroups(full.session.game_id, true)
+        setGroups(g2)
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'فشل اختيار اللاعب')
-      setPostSpin('idle')
+      setPhase('idle')
     } finally {
       setSpinning(false)
       setBusy(false)
+      // احتياطي لو onLanded ما اشتغلش خلال 5 ثوانٍ
+      const fallback = window.setTimeout(() => {
+        if (postSpinRef.current === 'spinning') {
+          const name =
+            data?.players.find((p) => p.roster_player_id === data.session.selected_player_id)
+              ?.display_name_snapshot || 'اللاعب'
+          startCelebrateSequence(name)
+        }
+      }, 5000)
+      postSpinTimers.current.push(fallback)
     }
   }
 
@@ -291,7 +322,7 @@ export function PlayPage() {
         correct_option_id: res.correct_option_id,
       })
       if (res.is_correct) {
-        sfx.correct() // نغمة + «برافو!»
+        sfx.correct()
         sfx.points()
         setFlash('ok')
         setScoreBump(true)
@@ -299,7 +330,7 @@ export function PlayPage() {
         window.setTimeout(() => setConfetti(false), 2200)
         window.setTimeout(() => setScoreBump(false), 500)
       } else {
-        sfx.wrong() // نغمة + «للأسف خطأ يا عبقرينو»
+        sfx.wrong()
         setFlash('bad')
       }
       await reload()
@@ -316,15 +347,15 @@ export function PlayPage() {
     setReveal(null)
     sfx.click()
     sfx.whoosh()
-    setPostSpin('idle')
+    setPhase('idle')
     try {
       await advanceSession(sessionId)
       const full = await reload()
       if (full?.session.status === 'selecting_player' || full?.session.status === 'ready') {
-        setPostSpin('idle')
+        setPhase('idle')
       }
       if (full?.session.status === 'selecting_group') {
-        setPostSpin('pick_group')
+        setPhase('pick_group')
         const gs = await listGroups(full.session.game_id, true)
         setGroups(gs)
       }
@@ -360,13 +391,16 @@ export function PlayPage() {
   const status = session.status
   const winningScore = Number(settings.winning_score) || 5
 
+  // العجلة تظهر طوال اللف والاحتفال — مش شاشة فاضية
   const showWheel =
+    spinning ||
+    postSpin === 'spinning' ||
+    postSpin === 'celebrate' ||
     status === 'ready' ||
-    status === 'selecting_player' ||
-    (status === 'selecting_group' && postSpin === 'celebrate')
+    status === 'selecting_player'
 
-  const showReadyAlone = status === 'selecting_group' && postSpin === 'you_are_ready'
-  const showGroupPicker = status === 'selecting_group' && postSpin === 'pick_group'
+  const showReadyAlone = postSpin === 'you_are_ready'
+  const showGroupPicker = postSpin === 'pick_group' && status === 'selecting_group'
 
   return (
     <div
@@ -408,7 +442,7 @@ export function PlayPage() {
       )}
 
       <main className="flex-1 flex flex-col items-center justify-center p-6 max-w-3xl mx-auto w-full z-10">
-        {showWheel && (
+        {showWheel && !showReadyAlone && !showGroupPicker && (
           <div className="text-center space-y-5 w-full">
             <h2 className="text-2xl font-black tracking-wide fx-enter">عجلة المخدومين</h2>
             <PlayerWheel
@@ -418,7 +452,7 @@ export function PlayPage() {
               onSpinRequest={onSpin}
               onLanded={onWheelLanded}
               disabled={busy}
-              hideSpinButton={postSpin === 'celebrate'}
+              hideSpinButton={postSpin === 'spinning' || postSpin === 'celebrate'}
             />
 
             {postSpin === 'celebrate' && (
@@ -431,7 +465,6 @@ export function PlayPage() {
           </div>
         )}
 
-        {/* شاشة You are ready لوحدها بالكامل */}
         {showReadyAlone && (
           <div className="text-center space-y-6 fx-pop py-12">
             <p className="text-5xl sm:text-6xl font-black text-amber-300 drop-shadow-lg tracking-wide">

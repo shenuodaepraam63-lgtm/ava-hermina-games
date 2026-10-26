@@ -11,10 +11,8 @@ type Props = {
   selectedRosterId: string | null
   spinning: boolean
   onSpinRequest: () => void
-  /** يُستدعى مرة واحدة بعد توقف العجلة وظهور الاسم */
   onLanded?: (playerName: string) => void
   disabled?: boolean
-  /** إخفاء زر اللف أثناء مرحلة الاحتفال */
   hideSpinButton?: boolean
 }
 
@@ -42,9 +40,12 @@ export function PlayerWheel({
   const [animating, setAnimating] = useState(false)
   const [landed, setLanded] = useState(false)
   const tickRef = useRef<number | null>(null)
-  const prevSpinning = useRef(false)
+  const landTimerRef = useRef<number | null>(null)
+  const wasSpinning = useRef(false)
   const angleRef = useRef(0)
   const landedNotified = useRef(false)
+  const onLandedRef = useRef(onLanded)
+  onLandedRef.current = onLanded
 
   const n = Math.max(players.length, 1)
   const slice = 360 / n
@@ -54,52 +55,72 @@ export function PlayerWheel({
     return players.findIndex((p) => p.id === selectedRosterId)
   }, [players, selectedRosterId])
 
+  function notifyLanded(name: string) {
+    if (landedNotified.current) return
+    landedNotified.current = true
+    setLanded(true)
+    setAnimating(false)
+    sfx.spinEnd()
+    onLandedRef.current?.(name)
+  }
+
+  function finishToIndex(idx: number) {
+    if (tickRef.current) {
+      window.clearInterval(tickRef.current)
+      tickRef.current = null
+    }
+    const targetSliceCenter = Math.max(0, idx) * slice + slice / 2
+    const extraTurns = 4 + Math.floor(Math.random() * 2)
+    const finalRotation =
+      angleRef.current +
+      extraTurns * 360 +
+      ((360 - targetSliceCenter - (angleRef.current % 360) + 360) % 360)
+    angleRef.current = finalRotation
+    setRotation(finalRotation)
+    setAnimating(true)
+
+    if (landTimerRef.current) window.clearTimeout(landTimerRef.current)
+    landTimerRef.current = window.setTimeout(() => {
+      const name = players[idx]?.name || players[0]?.name || ''
+      notifyLanded(name)
+    }, 3000)
+  }
+
+  // Start continuous spin
   useEffect(() => {
-    if (spinning && !prevSpinning.current) {
+    if (spinning && !wasSpinning.current) {
       setAnimating(true)
       setLanded(false)
       landedNotified.current = false
       sfx.spinStart()
-      const id = window.setInterval(() => {
+      if (tickRef.current) window.clearInterval(tickRef.current)
+      tickRef.current = window.setInterval(() => {
         angleRef.current += 36
         setRotation(angleRef.current)
         sfx.spinTick()
       }, 40)
-      tickRef.current = id
     }
 
-    if (!spinning && prevSpinning.current && selectedIndex >= 0) {
-      if (tickRef.current) {
-        window.clearInterval(tickRef.current)
-        tickRef.current = null
-      }
-      const targetSliceCenter = selectedIndex * slice + slice / 2
-      const extraTurns = 5 + Math.floor(Math.random() * 2)
-      const finalRotation =
-        angleRef.current +
-        extraTurns * 360 +
-        ((360 - targetSliceCenter - (angleRef.current % 360) + 360) % 360)
-      angleRef.current = finalRotation
-      setRotation(finalRotation)
-      setAnimating(true)
-      const t = window.setTimeout(() => {
-        setAnimating(false)
-        setLanded(true)
-        sfx.spinEnd()
-        if (!landedNotified.current) {
-          landedNotified.current = true
-          const name = players[selectedIndex]?.name || ''
-          onLanded?.(name)
-        }
-      }, 3200)
-      return () => window.clearTimeout(t)
+    // Spin ended → decelerate to selected (or first player as fallback)
+    if (!spinning && wasSpinning.current && !landedNotified.current) {
+      const idx = selectedIndex >= 0 ? selectedIndex : 0
+      finishToIndex(idx)
     }
-    prevSpinning.current = spinning
-  }, [spinning, selectedIndex, slice, players, onLanded])
+
+    wasSpinning.current = spinning
+  }, [spinning, selectedIndex, slice, players])
+
+  // If selection arrives slightly after spin ends, re-aim (only if not yet notified)
+  useEffect(() => {
+    if (!spinning && wasSpinning.current === false && selectedIndex >= 0 && !landedNotified.current && animating) {
+      // already finishing; leave as is
+    }
+  }, [selectedIndex, spinning, animating])
 
   useEffect(() => {
     return () => {
       if (tickRef.current) window.clearInterval(tickRef.current)
+      if (landTimerRef.current) window.clearTimeout(landTimerRef.current)
     }
   }, [])
 
@@ -133,7 +154,7 @@ export function PlayerWheel({
             transform: `rotate(${rotation}deg)`,
             transition:
               animating && !spinning
-                ? 'transform 3.2s cubic-bezier(0.08, 0.85, 0.12, 1)'
+                ? 'transform 3s cubic-bezier(0.08, 0.85, 0.12, 1)'
                 : undefined,
             filter: spinning ? 'brightness(1.1)' : undefined,
           }}
