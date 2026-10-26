@@ -98,10 +98,7 @@ export function PlayPage() {
           setGroupPicking(false)
           const gs = await listGroupsWithCounts(full.session.game_id, true)
           setGroups(gs.filter((g) => (g.question_count || 0) > 0))
-        } else if (
-          full.session.status === 'ready' ||
-          full.session.status === 'selecting_player'
-        ) {
+        } else if (full.session.status === 'ready' || full.session.status === 'selecting_player') {
           setPhase('idle')
           const gs = await listGroupsWithCounts(full.session.game_id, true)
           setGroups(gs.filter((g) => (g.question_count || 0) > 0))
@@ -158,10 +155,7 @@ export function PlayPage() {
             })
             setFlash('bad')
             sfx.timeout()
-            window.setTimeout(
-              () => sfx.playerLost((res.player_name as string) || undefined),
-              800
-            )
+            window.setTimeout(() => sfx.playerLost((res.player_name as string) || undefined), 800)
             await reload()
           } catch {
             /* race */
@@ -188,6 +182,31 @@ export function PlayPage() {
     return () => window.clearTimeout(t)
   }, [flash])
 
+  // منع الشاشة الفاضية: مزامنة الحالة مع السيرفر
+  useEffect(() => {
+    if (!data) return
+    const st = data.session.status
+    if (st === 'selecting_group') {
+      if (spinning) return
+      if (
+        postSpinRef.current === 'spinning' ||
+        postSpinRef.current === 'celebrate' ||
+        postSpinRef.current === 'you_are_ready'
+      ) {
+        return
+      }
+      if (postSpinRef.current !== 'pick_group') {
+        setPhase('pick_group')
+        void listGroupsWithCounts(data.session.game_id, true).then((gs) => {
+          setGroups(gs.filter((g) => (g.question_count || 0) > 0))
+        })
+      }
+    }
+    if ((st === 'ready' || st === 'selecting_player') && postSpinRef.current === 'pick_group') {
+      setPhase('idle')
+    }
+  }, [data, setPhase, spinning])
+
   const selectedPlayerName = useMemo(() => {
     if (!data?.session.selected_player_id) return null
     return (
@@ -213,7 +232,6 @@ export function PlayPage() {
   const startCelebrateSequence = useCallback(
     (name: string) => {
       if (postSpinRef.current === 'celebrate' || postSpinRef.current === 'you_are_ready') return
-      if (postSpinRef.current === 'pick_group') return
       clearPostSpinTimers()
       setPhase('celebrate')
       setConfetti(true)
@@ -272,14 +290,19 @@ export function PlayPage() {
     } finally {
       setSpinning(false)
       setBusy(false)
-      const fallback = window.setTimeout(() => {
-        if (postSpinRef.current === 'spinning') {
+      const fallback = window.setTimeout(async () => {
+        if (postSpinRef.current !== 'spinning') return
+        try {
+          const full = await getFullSession(sessionId!)
+          setData(full)
           const name =
-            data?.players.find((p) => p.roster_player_id === data.session.selected_player_id)
+            full.players.find((p) => p.roster_player_id === full.session.selected_player_id)
               ?.display_name_snapshot || 'اللاعب'
           startCelebrateSequence(name)
+        } catch {
+          startCelebrateSequence('اللاعب')
         }
-      }, 5000)
+      }, 4500)
       postSpinTimers.current.push(fallback)
     }
   }
@@ -297,6 +320,7 @@ export function PlayPage() {
     try {
       await selectGroup(sessionId, groupId)
       sfx.transition()
+      setPhase('idle')
       await reload()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'فشل اختيار المجال')
@@ -330,9 +354,7 @@ export function PlayPage() {
         setConfetti(true)
         window.setTimeout(() => setConfetti(false), 2200)
         window.setTimeout(() => setScoreBump(false), 500)
-        if (res.round_complete) {
-          sfx.win(res.player_name)
-        }
+        if (res.round_complete) sfx.win(res.player_name)
       } else {
         sfx.wrong()
         setFlash('bad')
@@ -421,11 +443,18 @@ export function PlayPage() {
     spinning ||
     postSpin === 'spinning' ||
     postSpin === 'celebrate' ||
-    status === 'ready' ||
-    status === 'selecting_player'
+    ((status === 'ready' || status === 'selecting_player') &&
+      postSpin !== 'you_are_ready' &&
+      postSpin !== 'pick_group')
 
-  const showReadyAlone = postSpin === 'you_are_ready'
-  const showGroupPicker = postSpin === 'pick_group' && status === 'selecting_group'
+  const showReadyAlone = postSpin === 'you_are_ready' && status === 'selecting_group'
+
+  const showGroupPicker =
+    status === 'selecting_group' &&
+    !spinning &&
+    postSpin !== 'spinning' &&
+    postSpin !== 'celebrate' &&
+    postSpin !== 'you_are_ready'
 
   return (
     <div
@@ -533,9 +562,7 @@ export function PlayPage() {
               })}
             </div>
             {groups.length === 0 && (
-              <p className="text-amber-200 text-sm max-w-md mx-auto">
-                لا توجد مجالات فيها أسئلة نشطة.
-              </p>
+              <p className="text-amber-200 text-sm max-w-md mx-auto">لا توجد مجالات فيها أسئلة نشطة.</p>
             )}
           </div>
         )}
@@ -680,6 +707,31 @@ export function PlayPage() {
             </Link>
           </div>
         )}
+
+        {!showWheel &&
+          !showReadyAlone &&
+          !showGroupPicker &&
+          status !== 'question_active' &&
+          status !== 'answer_reveal' &&
+          status !== 'player_lost' &&
+          status !== 'round_complete' && (
+            <div className="text-center space-y-4 fx-enter">
+              <p className="text-slate-300">جاري تجهيز الشاشة…</p>
+              <button
+                type="button"
+                className="fx-btn px-6 py-3 bg-red-600 rounded-xl font-bold"
+                onClick={() => {
+                  setPhase('idle')
+                  void reload()
+                }}
+              >
+                تحديث
+              </button>
+              <Link to="/admin" className="block text-sm text-slate-400 underline">
+                لوحة التحكم
+              </Link>
+            </div>
+          )}
       </main>
     </div>
   )
