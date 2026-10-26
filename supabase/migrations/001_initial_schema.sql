@@ -1,0 +1,5 @@
+-- See applied migration 001_initial_schema in Supabase
+-- Tables: profiles, games, game_settings, player_roster,
+-- question_groups, questions, question_options,
+-- game_sessions, session_players, session_questions,
+-- session_scores, session_events
