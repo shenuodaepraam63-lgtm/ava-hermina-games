@@ -7,6 +7,22 @@ export function AdminDashboard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <Link
+          to="/admin/sessions/new"
+          className="bg-red-600 text-white p-6 rounded-2xl hover:bg-red-700 transition shadow-sm"
+        >
+          <h2 className="font-semibold text-lg mb-1">بدء جولة عبقرينو</h2>
+          <p className="text-sm text-red-100">اختيار المشاركين وبدء اللعب</p>
+        </Link>
+
+        <Link
+          to="/admin/sessions"
+          className="bg-white p-6 rounded-2xl border border-slate-200 hover:border-red-300 hover:shadow-sm transition"
+        >
+          <h2 className="font-semibold text-lg text-slate-800 mb-1">سجل الجولات</h2>
+          <p className="text-sm text-slate-500">استعادة أو مراجعة جولة سابقة</p>
+        </Link>
+
+        <Link
           to="/admin/players"
           className="bg-white p-6 rounded-2xl border border-slate-200 hover:border-red-300 hover:shadow-sm transition"
         >
@@ -37,16 +53,6 @@ export function AdminDashboard() {
           <h2 className="font-semibold text-lg text-slate-800 mb-1">إعدادات عبقرينو</h2>
           <p className="text-sm text-slate-500">الوقت، النقاط، الفوز</p>
         </Link>
-
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 opacity-60">
-          <h2 className="font-semibold text-lg text-slate-800 mb-1">بدء جولة</h2>
-          <p className="text-sm text-slate-500">قريباً — محرك اللعب</p>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 opacity-60">
-          <h2 className="font-semibold text-lg text-slate-800 mb-1">سجل الجولات</h2>
-          <p className="text-sm text-slate-500">قريباً</p>
-        </div>
       </div>
     </div>
   )

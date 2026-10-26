@@ -20,6 +20,12 @@ export function AdminLayout() {
             <Link to="/admin" className="text-slate-600 hover:text-red-600">
               الرئيسية
             </Link>
+            <Link to="/admin/sessions/new" className="text-slate-600 hover:text-red-600">
+              جولة جديدة
+            </Link>
+            <Link to="/admin/sessions" className="text-slate-600 hover:text-red-600">
+              السجل
+            </Link>
             <Link to="/admin/players" className="text-slate-600 hover:text-red-600">
               الأسماء
             </Link>

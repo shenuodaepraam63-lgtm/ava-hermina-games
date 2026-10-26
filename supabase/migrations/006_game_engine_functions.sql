@@ -1,0 +1,3 @@
+-- See Supabase migration 006_game_engine_functions applied remotely.
+-- Functions: create_abqarino_session, select_session_player, select_session_group,
+-- submit_session_answer, timeout_session_question, advance_session
