@@ -12,6 +12,7 @@ export type QuestionGroup = {
   is_active: boolean
   created_at: string
   updated_at: string
+  question_count?: number
 }
 
 function slugify(name: string) {
@@ -35,6 +36,34 @@ export async function listGroups(gameId?: string, activeOnly = false) {
   const { data, error } = await query
   if (error) throw error
   return data as QuestionGroup[]
+}
+
+/** مجموعات نشطة ومعها عدد الأسئلة النشطة */
+export async function listGroupsWithCounts(gameId: string, activeOnly = true) {
+  const groups = await listGroups(gameId, activeOnly)
+  if (groups.length === 0) return []
+
+  const { data: counts, error } = await supabase
+    .from('questions')
+    .select('group_id')
+    .eq('is_active', true)
+    .in(
+      'group_id',
+      groups.map((g) => g.id)
+    )
+
+  if (error) throw error
+
+  const map = new Map<string, number>()
+  for (const row of counts || []) {
+    const id = (row as { group_id: string }).group_id
+    map.set(id, (map.get(id) || 0) + 1)
+  }
+
+  return groups.map((g) => ({
+    ...g,
+    question_count: map.get(g.id) || 0,
+  }))
 }
 
 export async function createGroup(input: {
@@ -62,7 +91,9 @@ export async function createGroup(input: {
 
 export async function updateGroup(
   id: string,
-  updates: Partial<Pick<QuestionGroup, 'name' | 'description' | 'icon' | 'is_active' | 'sort_order' | 'cover_image_url'>>
+  updates: Partial<
+    Pick<QuestionGroup, 'name' | 'description' | 'icon' | 'is_active' | 'sort_order' | 'cover_image_url'>
+  >
 ) {
   const payload: Record<string, unknown> = { ...updates, updated_at: new Date().toISOString() }
   if (updates.name) {

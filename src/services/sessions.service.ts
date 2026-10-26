@@ -64,12 +64,18 @@ export type FullSession = {
   scores: SessionScore[]
 }
 
+function rpcErrorMessage(error: { message?: string; details?: string; hint?: string }) {
+  const raw = error.details || error.message || 'حدث خطأ'
+  // Postgres RAISE EXCEPTION appears in message like: ...
+  return raw.replace(/^.*exception:\s*/i, '').trim() || raw
+}
+
 export async function createSession(playerIds: string[]) {
   const { data, error } = await supabase.rpc('create_abqarino_session', {
     p_player_ids: playerIds,
     p_game_slug: 'abqarino',
   })
-  if (error) throw error
+  if (error) throw new Error(rpcErrorMessage(error))
   return data as string
 }
 
@@ -98,7 +104,7 @@ export async function selectPlayer(sessionId: string) {
   const { data, error } = await supabase.rpc('select_session_player', {
     p_session_id: sessionId,
   })
-  if (error) throw error
+  if (error) throw new Error(rpcErrorMessage(error))
   return data as string
 }
 
@@ -107,7 +113,7 @@ export async function selectGroup(sessionId: string, groupId: string) {
     p_session_id: sessionId,
     p_group_id: groupId,
   })
-  if (error) throw error
+  if (error) throw new Error(rpcErrorMessage(error))
   return data as string
 }
 
@@ -123,7 +129,7 @@ export async function submitAnswer(
     p_selected_option_id: selectedOptionId,
     p_idempotency_key: idempotencyKey || null,
   })
-  if (error) throw error
+  if (error) throw new Error(rpcErrorMessage(error))
   return data as {
     is_correct?: boolean
     points_awarded?: number
@@ -142,7 +148,7 @@ export async function timeoutQuestion(sessionId: string, sessionQuestionId: stri
     p_session_id: sessionId,
     p_session_question_id: sessionQuestionId,
   })
-  if (error) throw error
+  if (error) throw new Error(rpcErrorMessage(error))
   return data as Record<string, unknown>
 }
 
@@ -150,7 +156,7 @@ export async function advanceSession(sessionId: string) {
   const { data, error } = await supabase.rpc('advance_session', {
     p_session_id: sessionId,
   })
-  if (error) throw error
+  if (error) throw new Error(rpcErrorMessage(error))
   return data as string
 }
 
