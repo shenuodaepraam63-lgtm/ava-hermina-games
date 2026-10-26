@@ -98,7 +98,10 @@ export function PlayPage() {
           setGroupPicking(false)
           const gs = await listGroupsWithCounts(full.session.game_id, true)
           setGroups(gs.filter((g) => (g.question_count || 0) > 0))
-        } else if (full.session.status === 'ready' || full.session.status === 'selecting_player') {
+        } else if (
+          full.session.status === 'ready' ||
+          full.session.status === 'selecting_player'
+        ) {
           setPhase('idle')
           const gs = await listGroupsWithCounts(full.session.game_id, true)
           setGroups(gs.filter((g) => (g.question_count || 0) > 0))
@@ -155,6 +158,10 @@ export function PlayPage() {
             })
             setFlash('bad')
             sfx.timeout()
+            window.setTimeout(
+              () => sfx.playerLost((res.player_name as string) || undefined),
+              800
+            )
             await reload()
           } catch {
             /* race */
@@ -169,7 +176,6 @@ export function PlayPage() {
 
   useEffect(() => {
     if (data?.session.status === 'round_complete') {
-      sfx.win()
       setConfetti(true)
       const t = window.setTimeout(() => setConfetti(false), 4500)
       return () => window.clearTimeout(t)
@@ -324,9 +330,16 @@ export function PlayPage() {
         setConfetti(true)
         window.setTimeout(() => setConfetti(false), 2200)
         window.setTimeout(() => setScoreBump(false), 500)
+        if (res.round_complete) {
+          sfx.win(res.player_name)
+        }
       } else {
         sfx.wrong()
         setFlash('bad')
+        window.setTimeout(
+          () => sfx.playerLost(res.player_name || selectedPlayerName || undefined),
+          900
+        )
       }
       await reload()
     } catch (e: unknown) {
@@ -356,6 +369,22 @@ export function PlayPage() {
         const gs = await listGroupsWithCounts(full.session.game_id, true)
         setGroups(gs.filter((g) => (g.question_count || 0) > 0))
       }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'فشل المتابعة')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function goToWheelAfterLoss() {
+    if (!sessionId || busy) return
+    setBusy(true)
+    sfx.click()
+    try {
+      await advanceSession(sessionId)
+      setPhase('idle')
+      setReveal(null)
+      await reload()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'فشل المتابعة')
     } finally {
@@ -431,7 +460,9 @@ export function PlayPage() {
       </header>
 
       {error && (
-        <div className="mx-4 mt-3 text-sm text-red-200 bg-red-900/50 px-4 py-2 rounded-xl fx-shake">{error}</div>
+        <div className="mx-4 mt-3 text-sm text-red-200 bg-red-900/50 px-4 py-2 rounded-xl fx-shake">
+          {error}
+        </div>
       )}
 
       <main className="flex-1 flex flex-col items-center justify-center p-6 max-w-3xl mx-auto w-full z-10">
@@ -459,7 +490,9 @@ export function PlayPage() {
 
         {showReadyAlone && (
           <div className="text-center space-y-6 fx-pop py-12">
-            <p className="text-5xl sm:text-6xl font-black text-amber-300 drop-shadow-lg tracking-wide">You are ready!</p>
+            <p className="text-5xl sm:text-6xl font-black text-amber-300 drop-shadow-lg tracking-wide">
+              You are ready!
+            </p>
             <p className="text-xl text-slate-300">{selectedPlayerName}</p>
           </div>
         )}
@@ -493,10 +526,7 @@ export function PlayPage() {
                       {g.question_count != null ? ` (${g.question_count})` : ''}
                     </span>
                     {isSel && (
-                      <>
-                        <span className="fx-ring absolute inset-[-8px] rounded-full border-2 border-red-400/50" />
-                        <span className="fx-sparkle absolute -top-2 -right-2 text-2xl">✨</span>
-                      </>
+                      <span className="fx-ring absolute inset-[-8px] rounded-full border-2 border-red-400/50" />
                     )}
                   </button>
                 )
@@ -504,7 +534,7 @@ export function PlayPage() {
             </div>
             {groups.length === 0 && (
               <p className="text-amber-200 text-sm max-w-md mx-auto">
-                لا توجد مجالات فيها أسئلة نشطة. أضف أسئلة من لوحة الإدارة للمجالات (التاريخ / الفنون / الرياضة…).
+                لا توجد مجالات فيها أسئلة نشطة.
               </p>
             )}
           </div>
@@ -513,20 +543,29 @@ export function PlayPage() {
         {(status === 'question_active' || status === 'answer_reveal') && activeQuestion && (
           <div className="w-full space-y-6 fx-enter">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-400">سؤال {(session.current_question_index || 0) + 1}</span>
+              <span className="text-sm text-slate-400">
+                سؤال {(session.current_question_index || 0) + 1}
+              </span>
               {status === 'question_active' && (
-                <span className={`text-3xl font-mono font-black tabular-nums ${secondsLeft <= 5 ? 'fx-timer-urgent' : 'text-amber-300'}`}>
+                <span
+                  className={`text-3xl font-mono font-black tabular-nums ${
+                    secondsLeft <= 5 ? 'fx-timer-urgent' : 'text-amber-300'
+                  }`}
+                >
                   {secondsLeft}
                   <span className="text-base font-medium mr-1">ث</span>
                 </span>
               )}
             </div>
-            <h2 className="text-xl md:text-2xl font-bold leading-relaxed fx-pop">{activeQuestion.question_text_snapshot}</h2>
+            <h2 className="text-xl md:text-2xl font-bold leading-relaxed fx-pop">
+              {activeQuestion.question_text_snapshot}
+            </h2>
             {activeQuestion.media_url && activeQuestion.media_type === 'image' && (
-              <img src={activeQuestion.media_url} alt="" className="max-h-56 mx-auto rounded-2xl border border-slate-600 object-contain fx-pop shadow-xl" />
-            )}
-            {activeQuestion.media_url && activeQuestion.media_type === 'audio' && (
-              <audio controls src={activeQuestion.media_url} className="w-full fx-enter" />
+              <img
+                src={activeQuestion.media_url}
+                alt=""
+                className="max-h-56 mx-auto rounded-2xl border border-slate-600 object-contain fx-pop shadow-xl"
+              />
             )}
             <div className="grid gap-3">
               {(activeQuestion.options_snapshot || []).map((opt, i) => {
@@ -534,7 +573,9 @@ export function PlayPage() {
                 const isSelected = activeQuestion.selected_option_id === opt.id
                 const isCorrectOpt =
                   reveal?.correct_option_id === opt.id ||
-                  (showCorrect && reveal?.correct_answer && opt.option_text === reveal.correct_answer)
+                  (showCorrect &&
+                    reveal?.correct_answer &&
+                    opt.option_text === reveal.correct_answer)
                 return (
                   <button
                     key={opt.id}
@@ -554,31 +595,87 @@ export function PlayPage() {
                 )
               })}
             </div>
-            {(status === 'answer_reveal' || reveal) && (
+            {(status === 'answer_reveal' || reveal) && !reveal?.timed_out && status !== 'player_lost' && (
               <div className="bg-slate-800/90 rounded-2xl p-5 space-y-2 border border-white/10 fx-pop">
-                {reveal?.timed_out && <p className="text-amber-300 font-bold text-lg">انتهى الوقت ⏱</p>}
-                {reveal && !reveal.timed_out && (
-                  <p className={reveal.is_correct ? 'text-green-400 font-black text-xl' : 'text-red-300 font-black text-xl'}>
-                    {reveal.is_correct ? `برافو! +${reveal.points_awarded || 0} ✨` : 'للأسف خطأ يا عبقرينو'}
+                {reveal && (
+                  <p
+                    className={
+                      reveal.is_correct
+                        ? 'text-green-400 font-black text-xl'
+                        : 'text-red-300 font-black text-xl'
+                    }
+                  >
+                    {reveal.is_correct
+                      ? `برافو! +${reveal.points_awarded || 0} ✨`
+                      : 'للأسف خطأ يا عبقرينو'}
                   </p>
                 )}
                 {showCorrect && reveal?.correct_answer && (
                   <p className="text-sm text-slate-300">الإجابة الصحيحة: {reveal.correct_answer}</p>
                 )}
-                {showExplanation && reveal?.explanation && <p className="text-sm text-slate-400">{reveal.explanation}</p>}
-                <button onClick={onNext} disabled={busy} className="fx-btn mt-3 px-8 py-3 bg-red-600 rounded-xl font-bold hover:bg-red-500 disabled:opacity-50">
-                  التالي
-                </button>
+                {showExplanation && reveal?.explanation && (
+                  <p className="text-sm text-slate-400">{reveal.explanation}</p>
+                )}
+                {reveal?.is_correct && (
+                  <button
+                    onClick={onNext}
+                    disabled={busy}
+                    className="fx-btn mt-3 px-8 py-3 bg-red-600 rounded-xl font-bold hover:bg-red-500 disabled:opacity-50"
+                  >
+                    التالي
+                  </button>
+                )}
               </div>
             )}
           </div>
         )}
 
+        {status === 'player_lost' && (
+          <div className="text-center space-y-6 fx-pop max-w-lg">
+            <p className="text-5xl">😢</p>
+            <h2 className="text-3xl sm:text-4xl font-black text-red-300 drop-shadow">
+              لقد خسر {selectedPlayerName || 'اللاعب'}
+            </h2>
+            <p className="text-slate-400">إجابة خاطئة أو انتهى الوقت</p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+              <button
+                type="button"
+                onClick={goToWheelAfterLoss}
+                disabled={busy}
+                className="fx-btn px-6 py-3 bg-amber-500 text-slate-900 rounded-xl font-bold"
+              >
+                تكملة — العجلة
+              </button>
+              <button
+                type="button"
+                onClick={goToWheelAfterLoss}
+                disabled={busy}
+                className="fx-btn px-6 py-3 bg-red-600 rounded-xl font-bold"
+              >
+                العودة للعجلة
+              </button>
+              <Link
+                to="/admin"
+                onClick={() => sfx.click()}
+                className="fx-btn px-6 py-3 bg-slate-700 rounded-xl font-bold text-center"
+              >
+                خروج
+              </Link>
+            </div>
+          </div>
+        )}
+
         {status === 'round_complete' && (
           <div className="text-center space-y-5 fx-pop">
-            <h2 className="text-4xl font-black text-amber-300 drop-shadow-lg">انتهت الجولة 🎉</h2>
+            <h2 className="text-4xl font-black text-amber-300 drop-shadow-lg">
+              الكاسب {selectedPlayerName || 'اللاعب'} 🏆
+            </h2>
             <p className="text-2xl font-bold">النتيجة النهائية: {totalScore}</p>
-            <Link to="/admin/sessions/new" className="fx-btn inline-block mt-4 px-8 py-3 bg-red-600 rounded-xl font-bold">
+            <p className="text-sm text-slate-400">تم تسجيل الفوز في قائمة الكاسبين</p>
+            <Link
+              to="/admin/sessions/new"
+              className="fx-btn inline-block mt-4 px-8 py-3 bg-red-600 rounded-xl font-bold"
+            >
               جولة جديدة
             </Link>
           </div>
