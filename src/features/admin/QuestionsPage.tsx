@@ -7,6 +7,7 @@ import {
   type Question,
 } from '../../services/questions.service'
 import { getGameBySlug } from '../../services/settings.service'
+import { uploadMedia } from '../../lib/cloudinary'
 
 export function QuestionsPage() {
   const [groups, setGroups] = useState<QuestionGroup[]>([])
@@ -15,6 +16,7 @@ export function QuestionsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [showForm, setShowForm] = useState(false)
 
   const [groupId, setGroupId] = useState('')
@@ -22,6 +24,9 @@ export function QuestionsPage() {
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium')
   const [explanation, setExplanation] = useState('')
   const [sourceRef, setSourceRef] = useState('')
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null)
+  const [mediaPublicId, setMediaPublicId] = useState<string | null>(null)
+  const [mediaType, setMediaType] = useState<'image' | 'audio' | null>(null)
   const [options, setOptions] = useState([
     { option_text: '', is_correct: true },
     { option_text: '', is_correct: false },
@@ -54,6 +59,24 @@ export function QuestionsPage() {
     setOptions((prev) => prev.map((o, i) => ({ ...o, is_correct: i === idx })))
   }
 
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setError(null)
+    try {
+      const media = await uploadMedia(file)
+      setMediaUrl(media.url)
+      setMediaPublicId(media.public_id)
+      setMediaType(media.media_type)
+    } catch (err: any) {
+      setError(err.message || 'فشل رفع الملف')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
@@ -66,11 +89,17 @@ export function QuestionsPage() {
         difficulty,
         explanation,
         source_reference: sourceRef,
+        media_url: mediaUrl,
+        media_public_id: mediaPublicId,
+        media_type: mediaType,
         options: filled,
       })
       setQuestionText('')
       setExplanation('')
       setSourceRef('')
+      setMediaUrl(null)
+      setMediaPublicId(null)
+      setMediaType(null)
       setOptions([
         { option_text: '', is_correct: true },
         { option_text: '', is_correct: false },
@@ -161,6 +190,37 @@ export function QuestionsPage() {
           />
 
           <div className="space-y-2">
+            <p className="text-sm font-medium text-slate-700">صورة أو صوت (Cloudinary — اختياري)</p>
+            <input
+              type="file"
+              accept="image/*,audio/*"
+              onChange={handleFile}
+              disabled={uploading}
+              className="block w-full text-sm text-slate-600"
+            />
+            {uploading && <p className="text-xs text-slate-500">جاري الرفع...</p>}
+            {mediaUrl && mediaType === 'image' && (
+              <img src={mediaUrl} alt="" className="max-h-40 rounded-xl border border-slate-200" />
+            )}
+            {mediaUrl && mediaType === 'audio' && (
+              <audio controls src={mediaUrl} className="w-full" />
+            )}
+            {mediaUrl && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMediaUrl(null)
+                  setMediaPublicId(null)
+                  setMediaType(null)
+                }}
+                className="text-xs text-red-600"
+              >
+                إزالة الوسائط
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-2">
             <p className="text-sm font-medium text-slate-700">الاختيارات (اختر الصحيحة)</p>
             {options.map((o, idx) => (
               <div key={idx} className="flex gap-2 items-center">
@@ -200,7 +260,7 @@ export function QuestionsPage() {
 
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || uploading}
             className="px-6 py-2.5 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 disabled:opacity-50"
           >
             {saving ? 'جاري الحفظ...' : 'حفظ السؤال'}
@@ -219,12 +279,22 @@ export function QuestionsPage() {
               key={q.id}
               className="bg-white border border-slate-200 rounded-2xl p-4 flex justify-between gap-4"
             >
-              <div>
-                <p className="font-medium text-slate-900">{q.question_text}</p>
-                <p className="text-xs text-slate-500 mt-1">
-                  {q.difficulty} · {q.question_options?.length || 0} خيارات ·{' '}
-                  {q.is_active ? 'نشط' : 'معطل'}
-                </p>
+              <div className="flex gap-3 min-w-0">
+                {q.media_url && q.media_type === 'image' && (
+                  <img
+                    src={q.media_url}
+                    alt=""
+                    className="w-16 h-16 object-cover rounded-lg shrink-0"
+                  />
+                )}
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-900">{q.question_text}</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {q.difficulty} · {q.question_options?.length || 0} خيارات ·{' '}
+                    {q.media_type ? `${q.media_type} · ` : ''}
+                    {q.is_active ? 'نشط' : 'معطل'}
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => toggleActive(q)}

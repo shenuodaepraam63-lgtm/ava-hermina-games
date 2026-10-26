@@ -49,6 +49,9 @@ export type CreateQuestionInput = {
   difficulty?: 'easy' | 'medium' | 'hard'
   explanation?: string
   source_reference?: string
+  media_url?: string | null
+  media_public_id?: string | null
+  media_type?: 'image' | 'audio' | null
   options: { option_text: string; is_correct: boolean }[]
 }
 
@@ -70,6 +73,9 @@ export async function createQuestion(input: CreateQuestionInput) {
       difficulty: input.difficulty || 'medium',
       explanation: input.explanation?.trim() || null,
       source_reference: input.source_reference?.trim() || null,
+      media_url: input.media_url || null,
+      media_public_id: input.media_public_id || null,
+      media_type: input.media_type || null,
     })
     .select()
     .single()
@@ -101,6 +107,9 @@ export async function updateQuestion(
       | 'is_active'
       | 'sort_order'
       | 'group_id'
+      | 'media_url'
+      | 'media_public_id'
+      | 'media_type'
     >
   >
 ) {
