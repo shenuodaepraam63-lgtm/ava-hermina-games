@@ -102,6 +102,8 @@ export function PlayPage() {
           setPhase('idle')
           const gs = await listGroupsWithCounts(full.session.game_id, true)
           setGroups(gs.filter((g) => (g.question_count || 0) > 0))
+        } else if (full.session.status === 'player_lost' || full.session.status === 'round_complete') {
+          setPhase('idle')
         }
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'تعذر تحميل الجولة')
@@ -155,6 +157,10 @@ export function PlayPage() {
             })
             setFlash('bad')
             sfx.timeout()
+            clearPostSpinTimers()
+            setPhase('idle')
+            setSelectedGroupId(null)
+            setGroupPicking(false)
             window.setTimeout(() => sfx.playerLost((res.player_name as string) || undefined), 800)
             await reload()
           } catch {
@@ -166,7 +172,7 @@ export function PlayPage() {
     tick()
     const id = window.setInterval(tick, 200)
     return () => window.clearInterval(id)
-  }, [data?.session.status, activeQuestion?.id, activeQuestion?.deadline_at, sessionId, reload])
+  }, [data?.session.status, activeQuestion?.id, activeQuestion?.deadline_at, sessionId, reload, setPhase])
 
   useEffect(() => {
     if (data?.session.status === 'round_complete') {
@@ -182,10 +188,16 @@ export function PlayPage() {
     return () => window.clearTimeout(t)
   }, [flash])
 
-  // منع الشاشة الفاضية: مزامنة الحالة مع السيرفر
   useEffect(() => {
     if (!data) return
     const st = data.session.status
+    if (st === 'player_lost' || st === 'round_complete' || st === 'question_active' || st === 'answer_reveal') {
+      if (postSpinRef.current !== 'idle') {
+        clearPostSpinTimers()
+        setPhase('idle')
+      }
+      return
+    }
     if (st === 'selecting_group') {
       if (spinning) return
       if (
@@ -358,6 +370,10 @@ export function PlayPage() {
       } else {
         sfx.wrong()
         setFlash('bad')
+        clearPostSpinTimers()
+        setPhase('idle')
+        setSelectedGroupId(null)
+        setGroupPicking(false)
         window.setTimeout(
           () => sfx.playerLost(res.player_name || selectedPlayerName || undefined),
           900
@@ -402,13 +418,19 @@ export function PlayPage() {
     if (!sessionId || busy) return
     setBusy(true)
     sfx.click()
+    clearPostSpinTimers()
+    setPhase('idle')
+    setReveal(null)
+    setSelectedGroupId(null)
+    setGroupPicking(false)
+    setSpinning(false)
     try {
       await advanceSession(sessionId)
-      setPhase('idle')
-      setReveal(null)
       await reload()
+      setPhase('idle')
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'فشل المتابعة')
+      setPhase('idle')
     } finally {
       setBusy(false)
     }
@@ -439,22 +461,16 @@ export function PlayPage() {
   const status = session.status
   const winningScore = Number(settings.winning_score) || 5
 
+  const inSpinFx = spinning || postSpin === 'spinning' || postSpin === 'celebrate'
+  const showReadyAlone = status === 'selecting_group' && postSpin === 'you_are_ready' && !inSpinFx
+  const showGroupPicker = status === 'selecting_group' && !inSpinFx && postSpin !== 'you_are_ready'
   const showWheel =
-    spinning ||
-    postSpin === 'spinning' ||
-    postSpin === 'celebrate' ||
-    ((status === 'ready' || status === 'selecting_player') &&
-      postSpin !== 'you_are_ready' &&
-      postSpin !== 'pick_group')
-
-  const showReadyAlone = postSpin === 'you_are_ready' && status === 'selecting_group'
-
-  const showGroupPicker =
-    status === 'selecting_group' &&
-    !spinning &&
-    postSpin !== 'spinning' &&
-    postSpin !== 'celebrate' &&
-    postSpin !== 'you_are_ready'
+    inSpinFx ||
+    ((status === 'ready' || status === 'selecting_player') && !showReadyAlone && !showGroupPicker)
+  const showLost = status === 'player_lost'
+  const showWon = status === 'round_complete'
+  const showQuestion =
+    (status === 'question_active' || status === 'answer_reveal') && !!activeQuestion
 
   return (
     <div
@@ -495,7 +511,58 @@ export function PlayPage() {
       )}
 
       <main className="flex-1 flex flex-col items-center justify-center p-6 max-w-3xl mx-auto w-full z-10">
-        {showWheel && !showReadyAlone && !showGroupPicker && (
+        {showLost && (
+          <div className="text-center space-y-6 fx-pop max-w-lg">
+            <p className="text-5xl">😢</p>
+            <h2 className="text-3xl sm:text-4xl font-black text-red-300 drop-shadow">
+              لقد خسر {selectedPlayerName || 'اللاعب'}
+            </h2>
+            <p className="text-slate-400">إجابة خاطئة أو انتهى الوقت</p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+              <button
+                type="button"
+                onClick={goToWheelAfterLoss}
+                disabled={busy}
+                className="fx-btn px-6 py-3 bg-amber-500 text-slate-900 rounded-xl font-bold"
+              >
+                تكملة — العجلة
+              </button>
+              <button
+                type="button"
+                onClick={goToWheelAfterLoss}
+                disabled={busy}
+                className="fx-btn px-6 py-3 bg-red-600 rounded-xl font-bold"
+              >
+                العودة للعجلة
+              </button>
+              <Link
+                to="/admin"
+                onClick={() => sfx.click()}
+                className="fx-btn px-6 py-3 bg-slate-700 rounded-xl font-bold text-center"
+              >
+                خروج
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {showWon && (
+          <div className="text-center space-y-5 fx-pop">
+            <h2 className="text-4xl font-black text-amber-300 drop-shadow-lg">
+              الكاسب {selectedPlayerName || 'اللاعب'} 🏆
+            </h2>
+            <p className="text-2xl font-bold">النتيجة النهائية: {totalScore}</p>
+            <p className="text-sm text-slate-400">تم تسجيل الفوز في قائمة الكاسبين</p>
+            <Link
+              to="/admin/sessions/new"
+              className="fx-btn inline-block mt-4 px-8 py-3 bg-red-600 rounded-xl font-bold"
+            >
+              جولة جديدة
+            </Link>
+          </div>
+        )}
+
+        {!showLost && !showWon && showWheel && !showReadyAlone && !showGroupPicker && (
           <div className="text-center space-y-5 w-full">
             <h2 className="text-2xl font-black tracking-wide fx-enter">عجلة المخدومين</h2>
             <PlayerWheel
@@ -517,7 +584,7 @@ export function PlayPage() {
           </div>
         )}
 
-        {showReadyAlone && (
+        {!showLost && !showWon && showReadyAlone && (
           <div className="text-center space-y-6 fx-pop py-12">
             <p className="text-5xl sm:text-6xl font-black text-amber-300 drop-shadow-lg tracking-wide">
               You are ready!
@@ -526,7 +593,7 @@ export function PlayPage() {
           </div>
         )}
 
-        {showGroupPicker && (
+        {!showLost && !showWon && showGroupPicker && (
           <div className="text-center space-y-6 w-full fx-enter">
             <h2 className="text-2xl font-black fx-pop">
               <span className="text-amber-300">{selectedPlayerName}</span> — اختر المجال
@@ -567,7 +634,7 @@ export function PlayPage() {
           </div>
         )}
 
-        {(status === 'question_active' || status === 'answer_reveal') && activeQuestion && (
+        {!showLost && !showWon && showQuestion && activeQuestion && (
           <div className="w-full space-y-6 fx-enter">
             <div className="flex items-center justify-between">
               <span className="text-sm text-slate-400">
@@ -622,7 +689,7 @@ export function PlayPage() {
                 )
               })}
             </div>
-            {(status === 'answer_reveal' || reveal) && !reveal?.timed_out && status !== 'player_lost' && (
+            {(status === 'answer_reveal' || reveal) && !reveal?.timed_out && (
               <div className="bg-slate-800/90 rounded-2xl p-5 space-y-2 border border-white/10 fx-pop">
                 {reveal && (
                   <p
@@ -657,64 +724,12 @@ export function PlayPage() {
           </div>
         )}
 
-        {status === 'player_lost' && (
-          <div className="text-center space-y-6 fx-pop max-w-lg">
-            <p className="text-5xl">😢</p>
-            <h2 className="text-3xl sm:text-4xl font-black text-red-300 drop-shadow">
-              لقد خسر {selectedPlayerName || 'اللاعب'}
-            </h2>
-            <p className="text-slate-400">إجابة خاطئة أو انتهى الوقت</p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
-              <button
-                type="button"
-                onClick={goToWheelAfterLoss}
-                disabled={busy}
-                className="fx-btn px-6 py-3 bg-amber-500 text-slate-900 rounded-xl font-bold"
-              >
-                تكملة — العجلة
-              </button>
-              <button
-                type="button"
-                onClick={goToWheelAfterLoss}
-                disabled={busy}
-                className="fx-btn px-6 py-3 bg-red-600 rounded-xl font-bold"
-              >
-                العودة للعجلة
-              </button>
-              <Link
-                to="/admin"
-                onClick={() => sfx.click()}
-                className="fx-btn px-6 py-3 bg-slate-700 rounded-xl font-bold text-center"
-              >
-                خروج
-              </Link>
-            </div>
-          </div>
-        )}
-
-        {status === 'round_complete' && (
-          <div className="text-center space-y-5 fx-pop">
-            <h2 className="text-4xl font-black text-amber-300 drop-shadow-lg">
-              الكاسب {selectedPlayerName || 'اللاعب'} 🏆
-            </h2>
-            <p className="text-2xl font-bold">النتيجة النهائية: {totalScore}</p>
-            <p className="text-sm text-slate-400">تم تسجيل الفوز في قائمة الكاسبين</p>
-            <Link
-              to="/admin/sessions/new"
-              className="fx-btn inline-block mt-4 px-8 py-3 bg-red-600 rounded-xl font-bold"
-            >
-              جولة جديدة
-            </Link>
-          </div>
-        )}
-
         {!showWheel &&
           !showReadyAlone &&
           !showGroupPicker &&
-          status !== 'question_active' &&
-          status !== 'answer_reveal' &&
-          status !== 'player_lost' &&
-          status !== 'round_complete' && (
+          !showQuestion &&
+          !showLost &&
+          !showWon && (
             <div className="text-center space-y-4 fx-enter">
               <p className="text-slate-300">جاري تجهيز الشاشة…</p>
               <button
