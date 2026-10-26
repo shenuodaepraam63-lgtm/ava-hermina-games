@@ -43,6 +43,8 @@ export type SessionQuestion = {
   started_at: string | null
   deadline_at: string | null
   answered_at: string | null
+  media_url?: string | null
+  media_type?: 'image' | 'audio' | string | null
 }
 
 export type SessionScore = {
@@ -75,7 +77,6 @@ export async function getFullSession(sessionId: string): Promise<FullSession> {
   const [sessionRes, playersRes, questionsRes, scoresRes] = await Promise.all([
     supabase.from('game_sessions').select('*').eq('id', sessionId).single(),
     supabase.from('session_players').select('*').eq('session_id', sessionId).order('seat_order'),
-    // Secure RPC: strips correct_* and explanation until question is resolved
     supabase.rpc('get_session_questions_for_play', { p_session_id: sessionId }),
     supabase.from('session_scores').select('*').eq('session_id', sessionId),
   ])
