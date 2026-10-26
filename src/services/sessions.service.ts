@@ -75,13 +75,8 @@ export async function getFullSession(sessionId: string): Promise<FullSession> {
   const [sessionRes, playersRes, questionsRes, scoresRes] = await Promise.all([
     supabase.from('game_sessions').select('*').eq('id', sessionId).single(),
     supabase.from('session_players').select('*').eq('session_id', sessionId).order('seat_order'),
-    supabase
-      .from('session_questions')
-      .select(
-        'id, session_id, question_id, question_order, question_text_snapshot, question_type_snapshot, explanation_snapshot, source_reference_snapshot, options_snapshot, selected_option_id, is_correct, points_awarded, status, started_at, deadline_at, answered_at'
-      )
-      .eq('session_id', sessionId)
-      .order('question_order'),
+    // Secure RPC: strips correct_* and explanation until question is resolved
+    supabase.rpc('get_session_questions_for_play', { p_session_id: sessionId }),
     supabase.from('session_scores').select('*').eq('session_id', sessionId),
   ])
 

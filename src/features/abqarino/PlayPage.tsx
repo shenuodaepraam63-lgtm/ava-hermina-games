@@ -11,6 +11,8 @@ import {
   type SessionQuestion,
 } from '../../services/sessions.service'
 import { listGroups, type QuestionGroup } from '../../services/groups.service'
+import { PlayerWheel } from './PlayerWheel'
+import { setSoundEnabled, sfx } from '../../lib/sounds'
 
 function remainingSeconds(deadlineAt: string | null | undefined) {
   if (!deadlineAt) return 0
@@ -25,15 +27,26 @@ export function PlayPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [spinning, setSpinning] = useState(false)
   const [reveal, setReveal] = useState<{
     is_correct?: boolean
     correct_answer?: string
     explanation?: string
     points_awarded?: number
     timed_out?: boolean
+    correct_option_id?: string
   } | null>(null)
   const [secondsLeft, setSecondsLeft] = useState(0)
   const timeoutFired = useRef(false)
+
+  const settings = data?.session.settings_snapshot || {}
+  const soundOn = settings.enable_sound_effects !== false
+  const showCorrect = settings.show_correct_answer_after_response !== false
+  const showExplanation = settings.show_explanation_after_response !== false
+
+  useEffect(() => {
+    setSoundEnabled(!!soundOn)
+  }, [soundOn])
 
   const reload = useCallback(async () => {
     if (!sessionId) return
@@ -55,7 +68,11 @@ export function PlayPage() {
         } catch {
           /* ignore */
         }
-        if (full.session.status === 'selecting_group' || full.session.status === 'ready') {
+        if (
+          full.session.status === 'selecting_group' ||
+          full.session.status === 'ready' ||
+          full.session.status === 'selecting_player'
+        ) {
           const gs = await listGroups(full.session.game_id, true)
           setGroups(gs)
         }
@@ -71,11 +88,14 @@ export function PlayPage() {
     if (!data) return undefined
     return (
       data.questions.find((q) => q.status === 'active') ||
-      data.questions.find((q) => q.question_order === data.session.current_question_index)
+      data.questions.find(
+        (q) =>
+          q.question_order === data.session.current_question_index &&
+          (q.status === 'answered' || q.status === 'timed_out' || q.status === 'active')
+      )
     )
   }, [data])
 
-  // Timer based on deadline_at
   useEffect(() => {
     if (!data || data.session.status !== 'question_active' || !activeQuestion?.deadline_at) {
       setSecondsLeft(0)
@@ -94,10 +114,12 @@ export function PlayPage() {
               timed_out: true,
               correct_answer: res.correct_answer as string,
               explanation: res.explanation as string,
+              correct_option_id: res.correct_option_id as string,
             })
+            sfx.timeout()
             await reload()
           } catch {
-            /* deadline race ok */
+            /* deadline race */
           }
         })()
       }
@@ -106,6 +128,10 @@ export function PlayPage() {
     const id = window.setInterval(tick, 250)
     return () => window.clearInterval(id)
   }, [data?.session.status, activeQuestion?.id, activeQuestion?.deadline_at, sessionId, reload])
+
+  useEffect(() => {
+    if (data?.session.status === 'round_complete') sfx.win()
+  }, [data?.session.status])
 
   const selectedPlayerName = useMemo(() => {
     if (!data?.session.selected_player_id) return null
@@ -120,21 +146,35 @@ export function PlayPage() {
     return data.scores.reduce((s, x) => s + x.score, 0)
   }, [data])
 
+  const wheelPlayers = useMemo(
+    () =>
+      (data?.players || []).map((p) => ({
+        id: p.roster_player_id || p.id,
+        name: p.display_name_snapshot,
+      })),
+    [data]
+  )
+
   async function onSpin() {
-    if (!sessionId || busy) return
+    if (!sessionId || busy || spinning) return
     setBusy(true)
+    setSpinning(true)
     setError(null)
     setReveal(null)
     try {
       await selectPlayer(sessionId)
-      const full = await reload()
-      if (full) {
-        const gs = await listGroups(full.session.game_id, true)
-        setGroups(gs)
+      await reload()
+      const gs = await listGroups(data?.session.game_id || '', true).catch(() => [])
+      if (gs.length) setGroups(gs)
+      else {
+        const full = await getFullSession(sessionId)
+        const g2 = await listGroups(full.session.game_id, true)
+        setGroups(g2)
       }
     } catch (e: any) {
       setError(e.message || 'فشل اختيار اللاعب')
     } finally {
+      setSpinning(false)
       setBusy(false)
     }
   }
@@ -144,11 +184,12 @@ export function PlayPage() {
     setBusy(true)
     setError(null)
     setReveal(null)
+    sfx.click()
     try {
       await selectGroup(sessionId, groupId)
       await reload()
     } catch (e: any) {
-      setError(e.message || 'فشل اختيار المجال')
+      setError(e.message || 'فشل اختيار المجال — تأكد من وجود أسئلة نشطة')
     } finally {
       setBusy(false)
     }
@@ -159,14 +200,17 @@ export function PlayPage() {
     setBusy(true)
     setError(null)
     try {
-      const key = `${sessionId}:${activeQuestion.id}:${optionId}`
+      const key = `${sessionId}:${activeQuestion.id}:${optionId}:${Date.now()}`
       const res = await submitAnswer(sessionId, activeQuestion.id, optionId, key)
       setReveal({
         is_correct: res.is_correct,
         correct_answer: res.correct_answer,
         explanation: res.explanation,
         points_awarded: res.points_awarded,
+        correct_option_id: res.correct_option_id,
       })
+      if (res.is_correct) sfx.correct()
+      else sfx.wrong()
       await reload()
     } catch (e: any) {
       setError(e.message || 'فشل تسجيل الإجابة')
@@ -179,13 +223,11 @@ export function PlayPage() {
     if (!sessionId || busy) return
     setBusy(true)
     setReveal(null)
+    sfx.click()
     try {
-      const status = await advanceSession(sessionId)
+      await advanceSession(sessionId)
       const full = await reload()
-      if (status === 'selecting_player' || full?.session.status === 'selecting_player') {
-        /* stay */
-      }
-      if (full?.session.status === 'selecting_group') {
+      if (full?.session.status === 'selecting_group' || full?.session.status === 'selecting_player') {
         const gs = await listGroups(full.session.game_id, true)
         setGroups(gs)
       }
@@ -219,17 +261,30 @@ export function PlayPage() {
 
   const { session } = data
   const status = session.status
+  const winningScore = Number(settings.winning_score) || 5
 
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col">
       <header className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
         <div>
           <p className="text-xs text-slate-400">عبقرينو</p>
-          <p className="font-bold text-lg">{selectedPlayerName || '—'} · {totalScore} نقطة</p>
+          <p className="font-bold text-lg">
+            {selectedPlayerName || '—'} · {totalScore}/{winningScore}
+          </p>
         </div>
-        <Link to="/admin" className="text-xs text-slate-400 hover:text-white">
-          لوحة التحكم
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setSoundEnabled(!soundOn)}
+            className="text-xs text-slate-400 hover:text-white"
+            title="الصوت يُضبط أيضاً من إعدادات الأدمن"
+          >
+            {soundOn ? '🔊' : '🔇'}
+          </button>
+          <Link to="/admin" className="text-xs text-slate-400 hover:text-white">
+            لوحة التحكم
+          </Link>
+        </div>
       </header>
 
       {error && (
@@ -238,33 +293,21 @@ export function PlayPage() {
 
       <main className="flex-1 flex flex-col items-center justify-center p-6 max-w-3xl mx-auto w-full">
         {(status === 'ready' || status === 'selecting_player') && (
-          <div className="text-center space-y-6">
+          <div className="text-center space-y-4 w-full">
             <h2 className="text-2xl font-bold">عجلة المخدومين</h2>
-            <div className="flex flex-wrap gap-2 justify-center max-w-lg">
-              {data.players.map((p) => (
-                <span
-                  key={p.id}
-                  className="px-3 py-1.5 rounded-full bg-slate-800 border border-slate-600 text-sm"
-                >
-                  {p.display_name_snapshot}
-                </span>
-              ))}
-            </div>
-            <button
-              onClick={onSpin}
+            <PlayerWheel
+              players={wheelPlayers}
+              selectedRosterId={session.selected_player_id}
+              spinning={spinning}
+              onSpinRequest={onSpin}
               disabled={busy}
-              className="px-10 py-4 bg-red-600 hover:bg-red-500 rounded-2xl text-xl font-bold disabled:opacity-50"
-            >
-              {busy ? '...' : 'لف العجلة'}
-            </button>
+            />
           </div>
         )}
 
         {status === 'selecting_group' && (
           <div className="text-center space-y-6 w-full">
-            <h2 className="text-2xl font-bold">
-              {selectedPlayerName} — اختر المجال
-            </h2>
+            <h2 className="text-2xl font-bold">{selectedPlayerName} — اختر المجال</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {groups.map((g) => (
                 <button
@@ -277,6 +320,9 @@ export function PlayPage() {
                 </button>
               ))}
             </div>
+            {groups.length === 0 && (
+              <p className="text-slate-400 text-sm">لا توجد مجموعات نشطة — أضفها من لوحة الإدارة</p>
+            )}
           </div>
         )}
 
@@ -305,15 +351,18 @@ export function PlayPage() {
               {(activeQuestion.options_snapshot || []).map((opt) => {
                 const revealed = status === 'answer_reveal' || !!reveal
                 const isSelected = activeQuestion.selected_option_id === opt.id
-                const isCorrectAnswer =
-                  reveal?.correct_answer && opt.option_text === reveal.correct_answer
+                const isCorrectOpt =
+                  reveal?.correct_option_id === opt.id ||
+                  (showCorrect &&
+                    reveal?.correct_answer &&
+                    opt.option_text === reveal.correct_answer)
                 return (
                   <button
                     key={opt.id}
                     disabled={busy || revealed || status !== 'question_active'}
                     onClick={() => onAnswer(opt.id)}
                     className={`text-right px-4 py-3 rounded-xl border text-base transition ${
-                      revealed && isCorrectAnswer
+                      revealed && isCorrectOpt && showCorrect
                         ? 'bg-green-700 border-green-500'
                         : revealed && isSelected && !reveal?.is_correct
                           ? 'bg-red-800 border-red-500'
@@ -330,16 +379,20 @@ export function PlayPage() {
               <div className="bg-slate-800/80 rounded-2xl p-4 space-y-2">
                 {reveal?.timed_out && <p className="text-amber-300 font-medium">انتهى الوقت</p>}
                 {reveal && !reveal.timed_out && (
-                  <p className={reveal.is_correct ? 'text-green-400 font-bold' : 'text-red-300 font-bold'}>
+                  <p
+                    className={
+                      reveal.is_correct ? 'text-green-400 font-bold' : 'text-red-300 font-bold'
+                    }
+                  >
                     {reveal.is_correct
                       ? `إجابة صحيحة! +${reveal.points_awarded || 0}`
                       : 'إجابة خاطئة'}
                   </p>
                 )}
-                {reveal?.correct_answer && (
+                {showCorrect && reveal?.correct_answer && (
                   <p className="text-sm text-slate-300">الإجابة الصحيحة: {reveal.correct_answer}</p>
                 )}
-                {reveal?.explanation && (
+                {showExplanation && reveal?.explanation && (
                   <p className="text-sm text-slate-400">{reveal.explanation}</p>
                 )}
                 <button
