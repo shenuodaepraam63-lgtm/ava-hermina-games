@@ -21,6 +21,9 @@ function remainingSeconds(deadlineAt: string | null | undefined) {
   return Math.max(0, Math.ceil(ms / 1000))
 }
 
+/** مراحل ما بعد العجلة قبل اختيار المجال */
+type PostSpinPhase = 'idle' | 'celebrate' | 'you_are_ready' | 'pick_group'
+
 export function PlayPage() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const [data, setData] = useState<FullSession | null>(null)
@@ -29,6 +32,8 @@ export function PlayPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [spinning, setSpinning] = useState(false)
+  const [postSpin, setPostSpin] = useState<PostSpinPhase>('idle')
+  const [countdown, setCountdown] = useState(5)
   const [reveal, setReveal] = useState<{
     is_correct?: boolean
     correct_answer?: string
@@ -43,6 +48,7 @@ export function PlayPage() {
   const [scoreBump, setScoreBump] = useState(false)
   const timeoutFired = useRef(false)
   const lastTickSec = useRef(-1)
+  const postSpinTimers = useRef<number[]>([])
 
   const settings = data?.session.settings_snapshot || {}
   const soundOn = settings.enable_sound_effects !== false
@@ -52,6 +58,11 @@ export function PlayPage() {
   useEffect(() => {
     setSoundEnabled(!!soundOn)
   }, [soundOn])
+
+  const clearPostSpinTimers = () => {
+    postSpinTimers.current.forEach((id) => window.clearTimeout(id))
+    postSpinTimers.current = []
+  }
 
   const reload = useCallback(async () => {
     if (!sessionId) return
@@ -73,11 +84,13 @@ export function PlayPage() {
         } catch {
           /* ignore */
         }
-        if (
-          full.session.status === 'selecting_group' ||
-          full.session.status === 'ready' ||
-          full.session.status === 'selecting_player'
-        ) {
+        // استعادة بعد Refresh: لو الجلسة بالفعل selecting_group نعرض المجالات مباشرة
+        if (full.session.status === 'selecting_group') {
+          setPostSpin('pick_group')
+          const gs = await listGroups(full.session.game_id, true)
+          setGroups(gs)
+        } else if (full.session.status === 'ready' || full.session.status === 'selecting_player') {
+          setPostSpin('idle')
           const gs = await listGroups(full.session.game_id, true)
           setGroups(gs)
         }
@@ -87,6 +100,7 @@ export function PlayPage() {
         setLoading(false)
       }
     })()
+    return () => clearPostSpinTimers()
   }, [sessionId])
 
   const activeQuestion: SessionQuestion | undefined = useMemo(() => {
@@ -181,12 +195,47 @@ export function PlayPage() {
     [data]
   )
 
+  /** بعد توقف العجلة: احتفال → انتظار 5 ث → You are ready → اختيار المجال */
+  const onWheelLanded = useCallback(
+    (_name: string) => {
+      clearPostSpinTimers()
+      setPostSpin('celebrate')
+      setConfetti(true)
+      setCountdown(5)
+      sfx.nameReveal()
+
+      // عداد 5 ثوانٍ مرئي
+      for (let s = 4; s >= 1; s--) {
+        const tid = window.setTimeout(() => setCountdown(s), (5 - s) * 1000)
+        postSpinTimers.current.push(tid)
+      }
+
+      // بعد 5 ثوانٍ: You are ready
+      const tReady = window.setTimeout(() => {
+        setPostSpin('you_are_ready')
+        setConfetti(false)
+        sfx.youAreReady()
+      }, 5000)
+      postSpinTimers.current.push(tReady)
+
+      // بعد ثانية ونص من You are ready: اختيار المجال
+      const tGroups = window.setTimeout(() => {
+        setPostSpin('pick_group')
+        sfx.transition()
+      }, 5000 + 1800)
+      postSpinTimers.current.push(tGroups)
+    },
+    []
+  )
+
   async function onSpin() {
     if (!sessionId || busy || spinning) return
     setBusy(true)
     setSpinning(true)
     setError(null)
     setReveal(null)
+    setPostSpin('idle')
+    clearPostSpinTimers()
     try {
       await selectPlayer(sessionId)
       await reload()
@@ -195,6 +244,7 @@ export function PlayPage() {
       setGroups(g2)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'فشل اختيار اللاعب')
+      setPostSpin('idle')
     } finally {
       setSpinning(false)
       setBusy(false)
@@ -259,10 +309,16 @@ export function PlayPage() {
     setReveal(null)
     sfx.click()
     sfx.whoosh()
+    setPostSpin('idle')
     try {
       await advanceSession(sessionId)
       const full = await reload()
-      if (full?.session.status === 'selecting_group' || full?.session.status === 'selecting_player') {
+      if (full?.session.status === 'selecting_player' || full?.session.status === 'ready') {
+        setPostSpin('idle')
+      }
+      if (full?.session.status === 'selecting_group') {
+        // لو رجعنا لمجال بدون عجلة (نادر) نعرض مباشرة
+        setPostSpin('pick_group')
         const gs = await listGroups(full.session.game_id, true)
         setGroups(gs)
       }
@@ -297,6 +353,13 @@ export function PlayPage() {
   const { session } = data
   const status = session.status
   const winningScore = Number(settings.winning_score) || 5
+
+  const showWheelStage =
+    status === 'ready' ||
+    status === 'selecting_player' ||
+    (status === 'selecting_group' && postSpin !== 'pick_group')
+
+  const showGroupPicker = status === 'selecting_group' && postSpin === 'pick_group'
 
   return (
     <div
@@ -337,20 +400,39 @@ export function PlayPage() {
       )}
 
       <main className="flex-1 flex flex-col items-center justify-center p-6 max-w-3xl mx-auto w-full z-10">
-        {(status === 'ready' || status === 'selecting_player') && (
-          <div className="text-center space-y-4 w-full">
+        {showWheelStage && (
+          <div className="text-center space-y-5 w-full">
             <h2 className="text-2xl font-black tracking-wide fx-enter">عجلة المخدومين</h2>
             <PlayerWheel
               players={wheelPlayers}
               selectedRosterId={session.selected_player_id}
               spinning={spinning}
               onSpinRequest={onSpin}
+              onLanded={onWheelLanded}
               disabled={busy}
+              hideSpinButton={postSpin === 'celebrate' || postSpin === 'you_are_ready'}
             />
+
+            {postSpin === 'celebrate' && (
+              <div className="fx-pop space-y-3">
+                <p className="text-xl text-amber-200 font-bold">🎉 مبروك! تم اختيار اللاعب</p>
+                <p className="text-5xl font-black text-white tabular-nums">{countdown}</p>
+                <p className="text-sm text-slate-400">استعد…</p>
+              </div>
+            )}
+
+            {postSpin === 'you_are_ready' && (
+              <div className="fx-pop space-y-2 py-4">
+                <p className="text-4xl sm:text-5xl font-black text-amber-300 drop-shadow-lg tracking-wide">
+                  You are ready!
+                </p>
+                <p className="text-lg text-slate-300">جاهز لاختيار المجال</p>
+              </div>
+            )}
           </div>
         )}
 
-        {status === 'selecting_group' && (
+        {showGroupPicker && (
           <div className="text-center space-y-6 w-full fx-enter">
             <h2 className="text-2xl font-black">
               <span className="text-amber-300">{selectedPlayerName}</span> — اختر المجال

@@ -52,6 +52,22 @@ function tone(
   osc.stop(t0 + duration + 0.03)
 }
 
+/** Spoken line via Web Speech API when available */
+function speak(text: string, lang = 'en-US') {
+  if (!enabled || typeof window === 'undefined' || !window.speechSynthesis) return
+  try {
+    window.speechSynthesis.cancel()
+    const u = new SpeechSynthesisUtterance(text)
+    u.lang = lang
+    u.rate = 0.95
+    u.pitch = 1.05
+    u.volume = 1
+    window.speechSynthesis.speak(u)
+  } catch {
+    /* ignore */
+  }
+}
+
 export const sfx = {
   unlock: unlockAudio,
 
@@ -80,6 +96,20 @@ export const sfx = {
     tone(440, 0.1, 'triangle', 0.09)
     tone(660, 0.14, 'sine', 0.08, 0.08)
     tone(880, 0.2, 'sine', 0.07, 0.16)
+  },
+
+  /** احتفال ظهور اسم اللاعب */
+  nameReveal() {
+    ;[523, 659, 784, 1046, 1319].forEach((f, i) => tone(f, 0.16, 'sine', 0.1, i * 0.08))
+    tone(1568, 0.25, 'triangle', 0.07, 0.42)
+  },
+
+  /** You are ready — نغمة + كلام */
+  youAreReady() {
+    tone(440, 0.12, 'sine', 0.08)
+    tone(554, 0.12, 'sine', 0.08, 0.1)
+    tone(659, 0.2, 'sine', 0.09, 0.2)
+    speak('You are ready!', 'en-US')
   },
 
   groupSelect() {

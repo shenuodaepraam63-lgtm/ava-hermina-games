@@ -11,7 +11,11 @@ type Props = {
   selectedRosterId: string | null
   spinning: boolean
   onSpinRequest: () => void
+  /** يُستدعى مرة واحدة بعد توقف العجلة وظهور الاسم */
+  onLanded?: (playerName: string) => void
   disabled?: boolean
+  /** إخفاء زر اللف أثناء مرحلة الاحتفال */
+  hideSpinButton?: boolean
 }
 
 const COLORS = [
@@ -25,13 +29,22 @@ const COLORS = [
   '#be123c',
 ]
 
-export function PlayerWheel({ players, selectedRosterId, spinning, onSpinRequest, disabled }: Props) {
+export function PlayerWheel({
+  players,
+  selectedRosterId,
+  spinning,
+  onSpinRequest,
+  onLanded,
+  disabled,
+  hideSpinButton,
+}: Props) {
   const [rotation, setRotation] = useState(0)
   const [animating, setAnimating] = useState(false)
   const [landed, setLanded] = useState(false)
   const tickRef = useRef<number | null>(null)
   const prevSpinning = useRef(false)
   const angleRef = useRef(0)
+  const landedNotified = useRef(false)
 
   const n = Math.max(players.length, 1)
   const slice = 360 / n
@@ -45,10 +58,10 @@ export function PlayerWheel({ players, selectedRosterId, spinning, onSpinRequest
     if (spinning && !prevSpinning.current) {
       setAnimating(true)
       setLanded(false)
+      landedNotified.current = false
       sfx.spinStart()
-      let speed = 36
       const id = window.setInterval(() => {
-        angleRef.current += speed
+        angleRef.current += 36
         setRotation(angleRef.current)
         sfx.spinTick()
       }, 40)
@@ -62,7 +75,10 @@ export function PlayerWheel({ players, selectedRosterId, spinning, onSpinRequest
       }
       const targetSliceCenter = selectedIndex * slice + slice / 2
       const extraTurns = 5 + Math.floor(Math.random() * 2)
-      const finalRotation = angleRef.current + extraTurns * 360 + ((360 - targetSliceCenter - (angleRef.current % 360) + 360) % 360)
+      const finalRotation =
+        angleRef.current +
+        extraTurns * 360 +
+        ((360 - targetSliceCenter - (angleRef.current % 360) + 360) % 360)
       angleRef.current = finalRotation
       setRotation(finalRotation)
       setAnimating(true)
@@ -70,11 +86,16 @@ export function PlayerWheel({ players, selectedRosterId, spinning, onSpinRequest
         setAnimating(false)
         setLanded(true)
         sfx.spinEnd()
+        if (!landedNotified.current) {
+          landedNotified.current = true
+          const name = players[selectedIndex]?.name || ''
+          onLanded?.(name)
+        }
       }, 3200)
       return () => window.clearTimeout(t)
     }
     prevSpinning.current = spinning
-  }, [spinning, selectedIndex, slice])
+  }, [spinning, selectedIndex, slice, players, onLanded])
 
   useEffect(() => {
     return () => {
@@ -94,10 +115,11 @@ export function PlayerWheel({ players, selectedRosterId, spinning, onSpinRequest
   }, [players, slice])
 
   const busy = spinning || animating
+  const selectedName = players.find((p) => p.id === selectedRosterId)?.name
 
   return (
     <div className="flex flex-col items-center gap-6 fx-enter">
-      <div className={`relative w-72 h-72 sm:w-88 sm:h-88 ${busy ? 'fx-wheel-glow' : ''}`}>
+      <div className={`relative w-72 h-72 sm:w-80 sm:h-80 ${busy ? 'fx-wheel-glow' : ''}`}>
         <div className="absolute left-1/2 -translate-x-1/2 -top-2 z-20 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]">
           <div className="w-0 h-0 border-l-[14px] border-r-[14px] border-t-[24px] border-l-transparent border-r-transparent border-t-amber-400" />
         </div>
@@ -138,24 +160,26 @@ export function PlayerWheel({ players, selectedRosterId, spinning, onSpinRequest
         </div>
       </div>
 
-      {selectedRosterId && !busy && (
-        <p className="text-2xl font-black text-amber-300 fx-pop drop-shadow">
-          {players.find((p) => p.id === selectedRosterId)?.name}
+      {selectedName && !busy && landed && (
+        <p className="text-3xl sm:text-4xl font-black text-amber-300 fx-pop drop-shadow-lg">
+          {selectedName}
         </p>
       )}
 
-      <button
-        type="button"
-        onClick={() => {
-          sfx.unlock()
-          sfx.uiTap()
-          onSpinRequest()
-        }}
-        disabled={disabled || busy || players.length === 0}
-        className="fx-btn px-12 py-4 bg-red-600 hover:bg-red-500 rounded-2xl text-xl font-black disabled:opacity-50"
-      >
-        {busy ? 'تدور…' : 'لف العجلة'}
-      </button>
+      {!hideSpinButton && (
+        <button
+          type="button"
+          onClick={() => {
+            sfx.unlock()
+            sfx.uiTap()
+            onSpinRequest()
+          }}
+          disabled={disabled || busy || players.length === 0}
+          className="fx-btn px-12 py-4 bg-red-600 hover:bg-red-500 rounded-2xl text-xl font-black disabled:opacity-50"
+        >
+          {busy ? 'تدور…' : 'لف العجلة'}
+        </button>
+      )}
     </div>
   )
 }
