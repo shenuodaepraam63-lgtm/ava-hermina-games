@@ -13,7 +13,7 @@ import {
 import { listGroupsWithCounts, type QuestionGroup } from '../../services/groups.service'
 import { PlayerWheel } from './PlayerWheel'
 import { Confetti } from './Confetti'
-import { setSoundEnabled, sfx, warmSpeech, startTensionMusic, stopTensionMusic } from '../../lib/sounds'
+import { setSoundEnabled, sfx, warmSpeech, startTensionMusic, stopTensionMusic, setTensionIntensity } from '../../lib/sounds'
 
 function remainingSeconds(deadlineAt: string | null | undefined) {
   if (!deadlineAt) return 0
@@ -146,13 +146,18 @@ export function PlayPage() {
     timeoutFired.current = false
     lastTickSec.current = -1
     sfx.questionAppear()
+    sfx.countdownStart()
     startTensionMusic()
+    setTensionIntensity(0)
     const tick = () => {
       const left = remainingSeconds(activeQuestion.deadline_at)
       setSecondsLeft(left)
+      const dur = Math.max(1, Number(settings.question_time_seconds) || 45)
+      setTensionIntensity(1 - Math.min(1, left / dur))
       if (left !== lastTickSec.current && left > 0 && left <= 5) {
         lastTickSec.current = left
         sfx.urgentTick()
+        if (left <= 3) sfx.secondTick(left)
       } else if (left !== lastTickSec.current && left > 5 && left <= 10) {
         lastTickSec.current = left
         sfx.tick()
@@ -390,7 +395,13 @@ export function PlayPage() {
         setConfetti(true)
         window.setTimeout(() => setConfetti(false), 2200)
         window.setTimeout(() => setScoreBump(false), 500)
-        if (res.round_complete) sfx.win(res.player_name)
+        if (res.round_complete) {
+          sfx.win(res.player_name)
+        } else {
+          const nextScore = totalScore + (res.points_awarded || 1)
+          const winAt = Number(settings.winning_score) || 5
+          if (nextScore === winAt - 1) sfx.nearWin()
+        }
       } else {
         sfx.wrong()
         setFlash('bad')
@@ -558,20 +569,10 @@ export function PlayPage() {
             </h2>
             <p className="text-slate-400">إجابة خاطئة أو انتهى الوقت</p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
-              <button
-                type="button"
-                onClick={goToWheelAfterLoss}
-                disabled={busy}
-                className="fx-btn px-6 py-3 bg-amber-500 text-slate-900 rounded-xl font-bold"
-              >
+              <button type="button" onClick={goToWheelAfterLoss} disabled={busy} className="fx-btn px-6 py-3 bg-amber-500 text-slate-900 rounded-xl font-bold">
                 تكملة — العجلة
               </button>
-              <button
-                type="button"
-                onClick={goToWheelAfterLoss}
-                disabled={busy}
-                className="fx-btn px-6 py-3 bg-red-600 rounded-xl font-bold"
-              >
+              <button type="button" onClick={goToWheelAfterLoss} disabled={busy} className="fx-btn px-6 py-3 bg-red-600 rounded-xl font-bold">
                 العودة للعجلة
               </button>
               <Link to="/admin" onClick={() => sfx.click()} className="fx-btn px-6 py-3 bg-slate-700 rounded-xl text-center">
@@ -622,9 +623,7 @@ export function PlayPage() {
                   disabled={busy || groupPicking}
                   onClick={() => onPickGroup(g.id)}
                   className={`fx-btn px-4 py-4 rounded-xl border text-right ${
-                    selectedGroupId === g.id
-                      ? 'bg-cyan-600/80 border-cyan-300'
-                      : 'bg-slate-800/90 border-slate-600'
+                    selectedGroupId === g.id ? 'bg-cyan-600/80 border-cyan-300' : 'bg-slate-800/90 border-slate-600'
                   }`}
                 >
                   <span className="font-bold">{g.name}</span>
@@ -638,19 +637,11 @@ export function PlayPage() {
         {!showLost && !showWon && showQuestion && activeQuestion && (
           <div className="w-full space-y-6 fx-enter">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-400">
-                سؤال {(session.current_question_index || 0) + 1}
-              </span>
+              <span className="text-sm text-slate-400">سؤال {(session.current_question_index || 0) + 1}</span>
               {status === 'question_active' && (
-                <span
-                  className={`text-3xl font-mono font-black tabular-nums ${
-                    secondsLeft <= 5
-                      ? 'fx-timer-urgent'
-                      : secondsLeft <= 10
-                        ? 'fx-timer-warning'
-                        : 'text-amber-300'
-                  }`}
-                >
+                <span className={`text-3xl font-mono font-black tabular-nums ${
+                  secondsLeft <= 5 ? 'fx-timer-urgent' : secondsLeft <= 10 ? 'fx-timer-warning' : 'text-amber-300'
+                }`}>
                   {secondsLeft}
                   <span className="text-base font-medium mr-1">ث</span>
                 </span>
@@ -660,25 +651,15 @@ export function PlayPage() {
               <div className="h-2.5 rounded-full bg-slate-700/80 overflow-hidden border border-white/10">
                 <div
                   className={`h-full rounded-full transition-[width] duration-200 ${
-                    secondsLeft <= 5
-                      ? 'bg-red-500'
-                      : secondsLeft <= 10
-                        ? 'bg-orange-400'
-                        : 'bg-amber-400'
+                    secondsLeft <= 5 ? 'bg-red-500' : secondsLeft <= 10 ? 'bg-orange-400' : 'bg-amber-400'
                   }`}
                   style={{ width: `${timerProgress}%` }}
                 />
               </div>
             )}
-            <h2 className="text-xl md:text-2xl font-bold leading-relaxed fx-pop">
-              {activeQuestion.question_text_snapshot}
-            </h2>
+            <h2 className="text-xl md:text-2xl font-bold leading-relaxed fx-pop">{activeQuestion.question_text_snapshot}</h2>
             {activeQuestion.media_url && activeQuestion.media_type === 'image' && (
-              <img
-                src={activeQuestion.media_url}
-                alt=""
-                className="max-h-56 mx-auto rounded-2xl border border-slate-600 object-contain fx-pop shadow-xl"
-              />
+              <img src={activeQuestion.media_url} alt="" className="max-h-56 mx-auto rounded-2xl border border-slate-600 object-contain fx-pop shadow-xl" />
             )}
             <div className="grid gap-3">
               {(activeQuestion.options_snapshot || []).map((opt, i) => {
@@ -686,9 +667,7 @@ export function PlayPage() {
                 const isSelected = activeQuestion.selected_option_id === opt.id
                 const isCorrectOpt =
                   reveal?.correct_option_id === opt.id ||
-                  (showCorrect &&
-                    reveal?.correct_answer &&
-                    opt.option_text === reveal.correct_answer)
+                  (showCorrect && reveal?.correct_answer && opt.option_text === reveal.correct_answer)
                 return (
                   <button
                     key={opt.id}
@@ -711,13 +690,7 @@ export function PlayPage() {
             {(status === 'answer_reveal' || reveal) && (
               <div className="bg-slate-800/90 rounded-2xl p-5 space-y-2 border border-white/10 fx-pop">
                 {reveal && (
-                  <p
-                    className={
-                      reveal.is_correct
-                        ? 'text-green-400 font-black text-xl'
-                        : 'text-red-300 font-black text-xl'
-                    }
-                  >
+                  <p className={reveal.is_correct ? 'text-green-400 font-black text-xl' : 'text-red-300 font-black text-xl'}>
                     {reveal.is_correct
                       ? `برافو! +${reveal.points_awarded || 0} ✨`
                       : reveal.timed_out
@@ -732,11 +705,7 @@ export function PlayPage() {
                   <p className="text-sm text-slate-400">{reveal.explanation}</p>
                 )}
                 {reveal?.is_correct && (
-                  <button
-                    onClick={onNext}
-                    disabled={busy}
-                    className="fx-btn mt-2 px-5 py-2 bg-amber-500 text-slate-900 rounded-xl font-bold"
-                  >
+                  <button onClick={onNext} disabled={busy} className="fx-btn mt-2 px-5 py-2 bg-amber-500 text-slate-900 rounded-xl font-bold">
                     السؤال التالي
                   </button>
                 )}
@@ -745,16 +714,11 @@ export function PlayPage() {
           </div>
         )}
 
-        {!showLost &&
-          !showWon &&
-          !showWheel &&
-          !showReadyAlone &&
-          !showGroupPicker &&
-          !showQuestion && (
-            <div className="text-center text-slate-400 fx-pop">
-              <p>جاري التحميل…</p>
-            </div>
-          )}
+        {!showLost && !showWon && !showWheel && !showReadyAlone && !showGroupPicker && !showQuestion && (
+          <div className="text-center text-slate-400 fx-pop">
+            <p>جاري التحميل…</p>
+          </div>
+        )}
       </main>
     </div>
   )
