@@ -2,6 +2,8 @@
 
 let ctx: AudioContext | null = null
 let enabled = true
+let tensionActive = false
+let tensionNodes: AudioNode[] = []
 
 function getCtx() {
   if (typeof window === 'undefined') return null
@@ -17,11 +19,75 @@ function getCtx() {
 
 export function setSoundEnabled(on: boolean) {
   enabled = on
+  if (!on) stopTensionMusic()
 }
 
 export function unlockAudio() {
   const c = getCtx()
   if (c?.state === 'suspended') void c.resume()
+}
+
+/** Low-volume original tension bed; generated with Web Audio, no external audio files. */
+export function startTensionMusic() {
+  if (!enabled || tensionActive) return
+  const c = getCtx()
+  if (!c) return
+  if (c.state === 'suspended') void c.resume()
+
+  try {
+    const master = c.createGain()
+    master.gain.value = 0.42
+    const filter = c.createBiquadFilter()
+    filter.type = 'lowpass'
+    filter.frequency.value = 240
+    master.connect(filter)
+    filter.connect(c.destination)
+
+    const droneA = c.createOscillator()
+    const droneAGain = c.createGain()
+    droneA.type = 'sine'
+    droneA.frequency.value = 55
+    droneAGain.gain.value = 0.012
+    droneA.connect(droneAGain)
+    droneAGain.connect(master)
+
+    const droneB = c.createOscillator()
+    const droneBGain = c.createGain()
+    droneB.type = 'triangle'
+    droneB.frequency.value = 82.41
+    droneBGain.gain.value = 0.006
+    droneB.connect(droneBGain)
+    droneBGain.connect(master)
+
+    const pulse = c.createOscillator()
+    const pulseGain = c.createGain()
+    pulse.type = 'sine'
+    pulse.frequency.value = 1.6
+    pulseGain.gain.value = 0.003
+    pulse.connect(pulseGain)
+    pulseGain.connect(droneAGain.gain)
+
+    droneA.start()
+    droneB.start()
+    pulse.start()
+    tensionNodes = [droneA, droneB, pulse, droneAGain, droneBGain, pulseGain, filter, master]
+    tensionActive = true
+  } catch {
+    stopTensionMusic()
+  }
+}
+
+export function stopTensionMusic() {
+  tensionNodes.forEach((node) => {
+    try {
+      if (node instanceof OscillatorNode) node.stop()
+      node.disconnect()
+    } catch {
+      /* already stopped or disconnected */
+    }
+  })
+  tensionNodes = []
+  tensionActive = false
 }
 
 function tone(
