@@ -16,20 +16,19 @@ type Props = {
   hideSpinButton?: boolean
 }
 
-/** Alternating neon segment palette matching the brief */
 const NEON_COLORS = [
-  '#00d4ff', // cyan
-  '#0a84ff', // blue
-  '#30d158', // emerald
-  '#ff2d55', // hot pink
-  '#bf5af2', // purple
-  '#ffd60a', // gold
-  '#ff9f0a', // orange
-  '#64d2ff', // light cyan
-  '#ff375f', // fuchsia
-  '#5e5ce6', // indigo
-  '#ffd426', // yellow
-  '#ff6482', // coral pink
+  '#00d4ff',
+  '#0a84ff',
+  '#30d158',
+  '#ff2d55',
+  '#bf5af2',
+  '#ffd60a',
+  '#ff9f0a',
+  '#64d2ff',
+  '#ff375f',
+  '#5e5ce6',
+  '#ffd426',
+  '#ff6482',
 ]
 
 const AUDIENCE = [
@@ -193,9 +192,10 @@ export function PlayerWheel({
 
   return (
     <div
-      className={`relative flex flex-col items-center w-full max-w-[min(98vw,680px)] mx-auto fx-enter ${shakeClass}`}
+      className={`fixed inset-0 z-40 flex flex-col items-center justify-center overflow-hidden fx-enter ${shakeClass}`}
     >
-      <div className="relative w-full aspect-[5/4] sm:aspect-[16/11] max-h-[min(78vh,560px)] overflow-hidden rounded-2xl">
+      {/* Full viewport stage — edge to edge, no card frame */}
+      <div className="absolute inset-0 overflow-hidden">
         <div
           className="absolute inset-0"
           style={{
@@ -261,9 +261,7 @@ export function PlayerWheel({
         <div
           className="absolute bottom-0 left-0 right-0 h-[30%] pointer-events-none"
           style={{
-            background: `
-              linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(5,15,30,0.5) 60%, transparent 100%)
-            `,
+            background: `linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(5,15,30,0.5) 60%, transparent 100%)`,
           }}
         />
         <div
@@ -299,7 +297,7 @@ export function PlayerWheel({
         {busy && (
           <>
             <div
-              className="absolute left-1/2 top-[36%] -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+              className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
               style={{
                 width: '56%',
                 paddingBottom: '56%',
@@ -309,7 +307,7 @@ export function PlayerWheel({
               }}
             />
             <div
-              className="absolute left-1/2 top-[36%] -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+              className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
               style={{
                 width: '68%',
                 paddingBottom: '68%',
@@ -321,8 +319,8 @@ export function PlayerWheel({
         )}
 
         <div
-          className="absolute left-1/2 top-[36%] -translate-x-1/2 -translate-y-1/2 z-10"
-          style={{ width: 'min(56%, 300px)' }}
+          className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 z-10"
+          style={{ width: 'min(70vw, 400px)' }}
         >
           <div
             className="absolute left-1/2 -translate-x-1/2 top-[92%] w-[70%] pointer-events-none"
@@ -397,8 +395,7 @@ export function PlayerWheel({
               <div
                 className="relative w-5 h-5 rotate-45"
                 style={{
-                  background:
-                    'linear-gradient(135deg, #fff 0%, #ffd700 40%, #ff8c00 100%)',
+                  background: 'linear-gradient(135deg, #fff 0%, #ffd700 40%, #ff8c00 100%)',
                   boxShadow: `
                     0 0 10px rgba(255,200,50,0.9),
                     0 0 20px rgba(0,220,255,0.5),
@@ -408,7 +405,7 @@ export function PlayerWheel({
                 }}
               >
                 <div
-                  className="absolute inset-[3px] rotate-0"
+                  className="absolute inset-[3px]"
                   style={{
                     background: 'linear-gradient(135deg, #fff, #a5f3fc)',
                     opacity: 0.85,
@@ -480,7 +477,6 @@ export function PlayerWheel({
                       fontSize: n > 12 ? '8px' : n > 8 ? '10px' : '12px',
                       textShadow:
                         '0 0 4px rgba(0,0,0,1), 0 1px 2px rgba(0,0,0,0.95), 0 0 8px rgba(255,255,255,0.15)',
-                      letterSpacing: '0.01em',
                     }}
                   >
                     {label}
@@ -579,7 +575,7 @@ export function PlayerWheel({
         </div>
 
         <div
-          className="absolute inset-0 pointer-events-none rounded-2xl z-30"
+          className="absolute inset-0 pointer-events-none z-30"
           style={{
             background:
               'radial-gradient(ellipse 75% 65% at 50% 38%, transparent 35%, rgba(0,0,0,0.5) 100%)',
@@ -592,7 +588,7 @@ export function PlayerWheel({
       </div>
 
       {selectedName && !busy && landed && (
-        <div className="text-center mt-3 fx-neon-name-reveal z-20">
+        <div className="relative text-center mt-3 fx-neon-name-reveal z-50 px-4">
           <p
             className="text-4xl sm:text-5xl font-black tracking-wide"
             style={{
@@ -622,7 +618,7 @@ export function PlayerWheel({
             onSpinRequest()
           }}
           disabled={disabled || busy || players.length === 0}
-          className="fx-btn relative mt-4 px-14 py-4 rounded-2xl text-xl font-black disabled:opacity-50 z-20"
+          className="fx-btn relative mt-5 px-14 py-4 rounded-2xl text-xl font-black disabled:opacity-50 z-50"
           style={{
             background: busy
               ? 'linear-gradient(135deg, #7f1d1d, #991b1b)'
