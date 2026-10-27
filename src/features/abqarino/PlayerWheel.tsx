@@ -16,37 +16,22 @@ type Props = {
   hideSpinButton?: boolean
 }
 
-const NEON_COLORS = [
-  '#00f0ff',
-  '#0077ff',
-  '#00ff9d',
-  '#ff2d95',
-  '#b24dff',
-  '#ffd000',
-  '#ff6b00',
-  '#00d4ff',
-  '#ff4d6d',
-  '#7b61ff',
-  '#ffe566',
-  '#ff8fab',
+const SEGMENT_COLORS = [
+  '#148ed0',
+  '#ffad2f',
+  '#db3cae',
+  '#25d99a',
+  '#7e4ce0',
+  '#ff762d',
+  '#16bfe8',
+  '#a84be0',
+  '#2aab79',
+  '#f0448c',
+  '#1c6ed1',
+  '#e79d25',
 ]
 
-const AUDIENCE = [
-  { x: 4, scale: 0.78, delay: 0 },
-  { x: 10, scale: 0.92, delay: 0.07 },
-  { x: 16, scale: 1.05, delay: 0.03 },
-  { x: 22, scale: 0.88, delay: 0.11 },
-  { x: 28, scale: 1.1, delay: 0.05 },
-  { x: 34, scale: 0.95, delay: 0.09 },
-  { x: 40, scale: 0.85, delay: 0.02 },
-  { x: 60, scale: 0.9, delay: 0.06 },
-  { x: 66, scale: 1.08, delay: 0.12 },
-  { x: 72, scale: 0.92, delay: 0.04 },
-  { x: 78, scale: 1.02, delay: 0.1 },
-  { x: 84, scale: 0.86, delay: 0.08 },
-  { x: 90, scale: 0.98, delay: 0.01 },
-  { x: 96, scale: 0.8, delay: 0.13 },
-]
+const AUDIENCE_COUNT = 15
 
 export function PlayerWheel({
   players,
@@ -108,9 +93,9 @@ export function PlayerWheel({
     setRotation(finalRotation)
     setAnimating(true)
 
-    const DECEL_MS = 6000
+    const DECEL_MS = 5600
     let step = 0
-    const totalSteps = 60
+    const totalSteps = 56
     intensityTimerRef.current = window.setInterval(() => {
       step += 1
       const t = Math.min(1, step / totalSteps)
@@ -121,9 +106,7 @@ export function PlayerWheel({
             ? 0.175 + (t - 0.35) * 0.9
             : 0.49 + Math.pow((t - 0.7) / 0.3, 1.6) * 0.51
       setIntensity(Math.min(1, eased))
-      if (step % 3 === 0 && t > 0.45) {
-        sfx.spinTickSlow()
-      }
+      if (step % 3 === 0 && t > 0.45) sfx.spinTickSlow()
     }, DECEL_MS / totalSteps)
 
     if (landTimerRef.current) window.clearTimeout(landTimerRef.current)
@@ -174,545 +157,436 @@ export function PlayerWheel({
     }
   }, [])
 
-  const gradient = useMemo(() => {
-    if (players.length === 0) return '#0a0f1a'
-    const parts = players.map((_, i) => {
-      const c = NEON_COLORS[i % NEON_COLORS.length]
-      const a = (i * slice).toFixed(2)
-      const b = ((i + 1) * slice).toFixed(2)
-      return `${c} ${a}deg ${b}deg`
-    })
-    return `conic-gradient(from -90deg, ${parts.join(', ')})`
-  }, [players, slice])
-
   const busy = spinning || animating
   const selectedName = players.find((p) => p.id === selectedRosterId)?.name
-  const shakeClass =
-    intensity > 0.85
-      ? 'fx-portal-quake'
-      : intensity > 0.55
-        ? 'fx-portal-tremble'
-        : busy
-          ? 'fx-portal-hum'
-          : ''
 
-  const rimGlow = `
-    0 0 ${28 + intensity * 60}px rgba(0, 255, 255, ${0.5 + intensity * 0.45}),
-    0 0 ${55 + intensity * 80}px rgba(255, 80, 0, ${0.25 + intensity * 0.35}),
-    0 0 ${90 + intensity * 50}px rgba(120, 0, 255, ${0.15 + intensity * 0.2}),
-    inset 0 0 20px rgba(0, 200, 255, 0.15)
-  `
+  const segments = useMemo(() => {
+    const cx = 250
+    const cy = 250
+    const r = 247
+    const polar = (radius: number, angle: number) => {
+      const a = ((angle - 90) * Math.PI) / 180
+      return [cx + radius * Math.cos(a), cy + radius * Math.sin(a)] as const
+    }
+
+    const paths: {
+      d: string
+      color: string
+      labelX: number
+      labelY: number
+      mid: number
+      name: string
+      beadX: number
+      beadY: number
+    }[] = []
+
+    const list = players.length > 0 ? players : [{ id: 'empty', name: '—' }]
+    const step = 360 / list.length
+
+    list.forEach((p, i) => {
+      const start = i * step
+      const end = (i + 1) * step
+      const [x1, y1] = polar(r, start)
+      const [x2, y2] = polar(r, end)
+      const d = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2} Z`
+      const mid = start + step / 2
+      const [lx, ly] = polar(166, mid)
+      const [bx, by] = polar(236, mid)
+      paths.push({
+        d,
+        color: SEGMENT_COLORS[i % SEGMENT_COLORS.length],
+        labelX: lx,
+        labelY: ly,
+        mid,
+        name: p.name,
+        beadX: bx,
+        beadY: by,
+      })
+    })
+
+    const dots: { x: number; y: number; big: boolean }[] = []
+    for (let i = 0; i < 48; i++) {
+      const [x, y] = polar(244, i * 7.5)
+      dots.push({ x, y, big: i % 4 === 0 })
+    }
+
+    return { paths, dots, step }
+  }, [players])
 
   return (
-    <div
-      className={`fixed inset-0 z-40 flex flex-col items-center justify-center overflow-hidden fx-enter ${shakeClass}`}
-    >
-      <div className="absolute inset-0 overflow-hidden">
-        <div
-          className="absolute inset-0"
-          style={{
-            background: `
-              radial-gradient(ellipse 50% 40% at 50% 35%, rgba(0,80,140,0.45) 0%, transparent 60%),
-              radial-gradient(ellipse 80% 50% at 50% 100%, rgba(40,0,80,0.7) 0%, transparent 50%),
-              radial-gradient(circle at 20% 20%, rgba(0,100,150,0.12), transparent 40%),
-              radial-gradient(circle at 80% 25%, rgba(120,0,180,0.1), transparent 40%),
-              linear-gradient(180deg, #01050c 0%, #050d1a 30%, #0a0618 70%, #020208 100%)
-            `,
-          }}
-        />
+    <div className="fixed inset-0 z-40 overflow-hidden" dir="rtl">
+      <div
+        className="absolute inset-0"
+        style={{
+          background: `
+            radial-gradient(ellipse at 50% 38%, rgba(16,91,133,.34), transparent 43%),
+            radial-gradient(ellipse at 50% 105%, rgba(255,128,32,.13), transparent 40%),
+            linear-gradient(180deg,#02040a 0%,#071322 55%,#02040a 100%)
+          `,
+        }}
+      />
 
-        <div
-          className="absolute bottom-0 left-0 right-0 h-[40%] pointer-events-none"
-          style={{
-            background: `
-              linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%),
-              repeating-linear-gradient(
-                90deg,
-                transparent,
-                transparent 48px,
-                rgba(0,220,255,0.04) 48px,
-                rgba(0,220,255,0.04) 49px
-              )
-            `,
-            transform: 'perspective(600px) rotateX(55deg)',
-            transformOrigin: 'center bottom',
-            opacity: 0.7,
-          }}
-        />
+      <div
+        className="absolute inset-0 pointer-events-none opacity-80"
+        style={{
+          background:
+            'repeating-linear-gradient(90deg,transparent 0 8%,rgba(38,205,255,.12) 8.1%,transparent 8.35% 17%)',
+        }}
+      />
+      <div
+        className="absolute top-[4%] bottom-[10%] w-[23%] pointer-events-none"
+        style={{
+          left: '-7%',
+          border: '1px solid rgba(53,234,255,.25)',
+          background:
+            'repeating-linear-gradient(180deg,transparent 0 35px,rgba(53,234,255,.14) 36px 38px,transparent 39px 60px)',
+          boxShadow: 'inset 0 0 35px #062b3d,0 0 24px rgba(53,234,255,.12)',
+          transform: 'perspective(300px) rotateY(18deg)',
+        }}
+      />
+      <div
+        className="absolute top-[4%] bottom-[10%] w-[23%] pointer-events-none"
+        style={{
+          right: '-7%',
+          border: '1px solid rgba(53,234,255,.25)',
+          background:
+            'repeating-linear-gradient(180deg,transparent 0 35px,rgba(53,234,255,.14) 36px 38px,transparent 39px 60px)',
+          boxShadow: 'inset 0 0 35px #062b3d,0 0 24px rgba(53,234,255,.12)',
+          transform: 'perspective(300px) rotateY(-18deg)',
+        }}
+      />
 
-        <div
-          className="absolute top-0 left-0 right-0 h-[22%] pointer-events-none opacity-30"
-          style={{
-            background:
-              'linear-gradient(180deg, rgba(0,255,255,0.08), transparent), repeating-linear-gradient(90deg, transparent 0, transparent 60px, rgba(255,180,50,0.05) 60px, rgba(255,180,50,0.05) 62px)',
-          }}
-        />
+      <div
+        className="absolute left-[-10%] right-[-10%] bottom-[-5%] h-[22%] pointer-events-none"
+        style={{
+          transform: 'perspective(250px) rotateX(55deg)',
+          background: `
+            repeating-linear-gradient(90deg,transparent 0 9%,rgba(53,234,255,.3) 9.2%,transparent 9.5% 18%),
+            linear-gradient(180deg,rgba(4,16,28,.2),#010308)
+          `,
+          borderTop: '2px solid rgba(53,234,255,.35)',
+          boxShadow: '0 -10px 40px rgba(53,234,255,.1)',
+        }}
+      />
 
-        {[4, 96].map((left, i) => (
+      <div className="relative z-10 flex h-full flex-col items-center justify-center px-3 pb-8 pt-6">
+        <div className="mb-2 text-center">
           <div
-            key={`scr-${i}`}
-            className="absolute top-[12%] bottom-[22%] w-[8%] rounded-lg pointer-events-none overflow-hidden"
-            style={{
-              left: `${left}%`,
-              transform: 'translateX(-50%)',
-              background: 'linear-gradient(180deg, #031018, #01060c)',
-              border: '1px solid rgba(0,240,255,0.45)',
-              boxShadow: `
-                0 0 ${12 + intensity * 16}px rgba(0,220,255,0.35),
-                inset 0 0 20px rgba(0,100,150,0.4)
-              `,
-            }}
+            className="text-xs font-bold tracking-[0.18em]"
+            style={{ color: '#35eaff' }}
           >
-            <div
-              className="absolute inset-[2px] rounded-md"
-              style={{
-                background: `
-                  repeating-linear-gradient(0deg, transparent, transparent 5px, rgba(0,255,220,0.1) 5px, rgba(0,255,220,0.1) 6px),
-                  repeating-linear-gradient(90deg, transparent, transparent 10px, rgba(0,150,255,0.06) 10px, rgba(0,150,255,0.06) 11px),
-                  linear-gradient(180deg, rgba(0,60,100,0.5), rgba(80,0,120,0.35))
-                `,
-                opacity: 0.85 + intensity * 0.15,
-              }}
-            />
-            <div
-              className="absolute top-1 left-1 right-1 h-1.5 rounded-sm"
-              style={{
-                background: 'linear-gradient(90deg, #00f0ff, #ff00aa, #00f0ff)',
-                opacity: 0.7 + intensity * 0.3,
-                boxShadow: '0 0 8px rgba(0,240,255,0.6)',
-              }}
-            />
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[70%] h-0.5 rounded bg-cyan-400/60" />
-            <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[50%] h-[20%] rounded-sm border border-cyan-400/30 bg-cyan-500/10" />
+            AVA HERMINA GAMES
           </div>
-        ))}
-
-        {[12, 18, 82, 88].map((left, i) => (
-          <div
-            key={`p-${i}`}
-            className="absolute top-[8%] bottom-[20%] w-[3px] rounded-full pointer-events-none"
-            style={{
-              left: `${left}%`,
-              background:
-                i % 2 === 0
-                  ? 'linear-gradient(180deg, transparent 0%, #00f0ff 25%, #ff00cc 55%, #00f0ff 80%, transparent 100%)'
-                  : 'linear-gradient(180deg, transparent 0%, #ff9f0a 25%, #ff2d55 55%, #ff9f0a 80%, transparent 100%)',
-              opacity: 0.35 + intensity * 0.45,
-              boxShadow: `0 0 ${10 + intensity * 18}px ${i % 2 === 0 ? '#00e5ff' : '#ff8c00'}`,
-              animation: busy ? `fx-neon-flicker ${1 + i * 0.2}s ease-in-out infinite` : undefined,
-            }}
-          />
-        ))}
+          <h1
+            className="mt-1 text-[clamp(1.55rem,4vw,2.4rem)] font-black"
+            style={{ textShadow: '0 0 20px rgba(53,234,255,.45)' }}
+          >
+            عَبْقَرِينُو
+          </h1>
+          <div className="text-sm" style={{ color: '#a8bfd3' }}>
+            عجلة التحدّي • استعدّ للاختيار
+          </div>
+        </div>
 
         <div
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[55%] h-[28%] pointer-events-none"
+          className="relative mx-auto"
           style={{
-            background: `linear-gradient(to top, rgba(0,240,255,${0.12 + intensity * 0.15}), transparent)`,
-            clipPath: 'polygon(20% 100%, 80% 100%, 100% 0%, 0% 0%)',
+            width: 'min(78vw, 540px)',
+            aspectRatio: '1',
+            filter: 'drop-shadow(0 18px 35px rgba(0,0,0,.65))',
           }}
-        />
-        <div
-          className="absolute bottom-0 left-[22%] w-[2px] h-[26%] origin-bottom pointer-events-none"
-          style={{
-            background: `linear-gradient(to top, rgba(0,255,255,${0.55 + intensity * 0.35}), transparent)`,
-            transform: 'skewX(-12deg)',
-            boxShadow: '0 0 12px rgba(0,255,255,0.5)',
-          }}
-        />
-        <div
-          className="absolute bottom-0 right-[22%] w-[2px] h-[26%] origin-bottom pointer-events-none"
-          style={{
-            background: `linear-gradient(to top, rgba(0,255,255,${0.55 + intensity * 0.35}), transparent)`,
-            transform: 'skewX(12deg)',
-            boxShadow: '0 0 12px rgba(0,255,255,0.5)',
-          }}
-        />
-
-        {busy && (
-          <>
-            <div
-              className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
-              style={{
-                width: '58%',
-                paddingBottom: '58%',
-                border: `2px solid rgba(0,255,255,${0.35 + intensity * 0.35})`,
-                boxShadow: `0 0 ${24 + intensity * 40}px rgba(0,255,255,0.3)`,
-                animation: 'fx-portal-ring 2.4s linear infinite',
-              }}
-            />
-            <div
-              className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
-              style={{
-                width: '70%',
-                paddingBottom: '70%',
-                border: `1px solid rgba(255,100,0,${0.25 + intensity * 0.3})`,
-                animation: 'fx-portal-ring 3.2s linear infinite reverse',
-              }}
-            />
-            <div
-              className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
-              style={{
-                width: '82%',
-                paddingBottom: '82%',
-                border: `1px dashed rgba(180,0,255,${0.15 + intensity * 0.2})`,
-                animation: 'fx-portal-ring 4.5s linear infinite',
-              }}
-            />
-          </>
-        )}
-
-        <div
-          className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 z-10"
-          style={{ width: 'min(68vw, 420px)' }}
         >
           <div
-            className="absolute left-1/2 -translate-x-1/2 top-[94%] w-[75%] pointer-events-none"
-            style={{ zIndex: 1 }}
-          >
-            {[0, 1, 2, 3].map((lvl) => (
-              <div
-                key={lvl}
-                className="mx-auto rounded-full"
-                style={{
-                  width: `${100 - lvl * 14}%`,
-                  height: 5 + lvl * 2,
-                  marginTop: lvl === 0 ? 0 : 1.5,
-                  background:
-                    lvl === 0
-                      ? 'linear-gradient(90deg, #1a0800, #ffc040, #ff8c00, #ffc040, #1a0800)'
-                      : lvl === 1
-                        ? 'linear-gradient(90deg, #051018, #00e0ff, #051018)'
-                        : lvl === 2
-                          ? 'linear-gradient(90deg, #0a0a12, #444, #0a0a12)'
-                          : 'linear-gradient(90deg, #050508, #222, #050508)',
-                  boxShadow:
-                    lvl === 0
-                      ? `0 0 ${12 + intensity * 16}px rgba(255,160,40,0.65)`
-                      : lvl === 1
-                        ? `0 0 8px rgba(0,220,255,0.4)`
-                        : '0 0 4px rgba(0,0,0,0.5)',
-                  border:
-                    lvl === 0
-                      ? '1px solid rgba(255,230,150,0.7)'
-                      : '1px solid rgba(0,0,0,0.5)',
-                }}
-              />
-            ))}
-          </div>
-
-          <div
-            className={`relative aspect-square w-full ${landed ? 'fx-neon-land' : ''}`}
+            className="absolute rounded-full pointer-events-none"
             style={{
-              filter: landed
-                ? 'brightness(1.3) saturate(1.4)'
-                : intensity > 0.6
-                  ? `brightness(${1 + intensity * 0.22}) saturate(${1 + intensity * 0.3})`
-                  : undefined,
-            }}
-          >
-            <div
-              className="absolute -inset-[14px] rounded-full pointer-events-none"
-              style={{
-                background:
-                  'conic-gradient(from 0deg, #00f0ff, #ff00aa, #ffcc00, #00ff88, #7b61ff, #00f0ff)',
-                opacity: 0.5 + intensity * 0.45,
-                filter: `blur(${5 + intensity * 4}px)`,
-                animation: busy ? 'fx-neon-rotate 3.5s linear infinite' : undefined,
-              }}
-            />
-
-            <div
-              className="absolute -inset-[7px] rounded-full pointer-events-none"
-              style={{
-                background:
-                  'radial-gradient(circle, transparent 70%, #0a0e14 72%, #2a3545 76%, #0a0e14 82%, transparent 84%)',
-                boxShadow: rimGlow,
-              }}
-            />
-
-            <div
-              className="absolute -inset-[2px] rounded-full pointer-events-none"
-              style={{
-                border: '3px solid',
-                borderColor:
-                  intensity > 0.75 ? '#b0ffff' : intensity > 0.4 ? '#22d3ee' : '#06b6d4',
-                boxShadow: rimGlow,
-                transition: 'box-shadow 0.12s linear, border-color 0.15s',
-              }}
-            />
-
-            <div
-              className="absolute left-1/2 -translate-x-1/2 z-30 pointer-events-none"
-              style={{ top: '-16px' }}
-            >
-              <div
-                className="relative w-6 h-6 rotate-45"
-                style={{
-                  background:
-                    'linear-gradient(135deg, #ffffff 0%, #ffd700 35%, #ff8c00 100%)',
-                  boxShadow: `
-                    0 0 12px rgba(255,200,50,1),
-                    0 0 24px rgba(0,240,255,0.6),
-                    inset 0 0 8px rgba(255,255,255,0.8)
-                  `,
-                  border: '1px solid rgba(255,245,200,0.95)',
-                }}
-              >
-                <div
-                  className="absolute inset-[3px]"
-                  style={{
-                    background: 'linear-gradient(135deg, #fff, #a5f3fc)',
-                    opacity: 0.9,
-                  }}
-                />
-              </div>
-            </div>
-
-            <div
-              className="absolute left-1/2 -translate-x-1/2 z-30"
-              style={{ bottom: '-8px' }}
-            >
-              <div
-                className="w-0 h-0 border-l-[14px] border-r-[14px] border-b-[26px] border-l-transparent border-r-transparent border-b-amber-400"
-                style={{
-                  filter: `drop-shadow(0 0 ${10 + intensity * 14}px #ffaa00)`,
-                }}
-              />
-              <div
-                className="absolute left-1/2 -translate-x-1/2 top-full w-3 h-3.5 rounded-b-sm"
-                style={{
-                  background: 'linear-gradient(180deg, #ffc040, #cc5500)',
-                  boxShadow: '0 0 8px rgba(255,160,40,0.7)',
-                }}
-              />
-            </div>
-
-            <div
-              className="absolute inset-0 rounded-full overflow-hidden"
-              style={{
-                background: gradient,
-                transform: `rotate(${rotation}deg)`,
-                transition:
-                  animating && !spinning
-                    ? 'transform 6s cubic-bezier(0.12, 0.6, 0.05, 1)'
-                    : undefined,
-                boxShadow: `
-                  inset 0 0 50px rgba(0,0,0,0.6),
-                  inset 0 0 20px rgba(0,0,0,0.4),
-                  0 0 ${20 + intensity * 45}px rgba(255,60,0,${0.25 + intensity * 0.35})
-                `,
-                border: '4px solid rgba(8,12,20,0.9)',
-              }}
-            >
-              <div
-                className="absolute inset-0 rounded-full pointer-events-none"
-                style={{
-                  background:
-                    'radial-gradient(circle at 50% 50%, transparent 35%, rgba(0,0,0,0.25) 70%, rgba(0,0,0,0.5) 100%)',
-                }}
-              />
-
-              {players.map((_, i) => {
-                const a = i * slice
-                return (
-                  <div
-                    key={`div-${i}`}
-                    className="absolute left-1/2 top-1/2 w-[50%] h-[2px] origin-left pointer-events-none"
-                    style={{
-                      transform: `rotate(${a - 90}deg)`,
-                      background:
-                        'linear-gradient(90deg, transparent 5%, rgba(255,255,255,0.25) 25%, rgba(255,255,255,0.95) 100%)',
-                      boxShadow: '0 0 6px rgba(255,255,255,0.5)',
-                    }}
-                  />
-                )
-              })}
-
-              {players.map((p, i) => {
-                const angle = -90 + i * slice + slice / 2
-                const maxLen = n > 10 ? 8 : n > 6 ? 10 : 12
-                const label =
-                  p.name.length > maxLen ? p.name.slice(0, maxLen - 1) + '…' : p.name
-                const fontSize =
-                  n > 12 ? '10px' : n > 8 ? '12px' : n > 5 ? '14px' : '16px'
-                return (
-                  <div
-                    key={p.id}
-                    className="absolute left-1/2 top-1/2 origin-left text-white font-black whitespace-nowrap pointer-events-none"
-                    style={{
-                      transform: `rotate(${angle}deg) translate(${n > 8 ? 40 : 48}px, -50%)`,
-                      width: n > 10 ? '30%' : '36%',
-                      fontSize,
-                      textShadow:
-                        '0 0 6px rgba(0,0,0,1), 0 2px 4px rgba(0,0,0,1), 0 0 12px rgba(255,255,255,0.25)',
-                      letterSpacing: '0.02em',
-                    }}
-                  >
-                    {label}
-                  </div>
-                )
-              })}
-
-              <div
-                className="absolute inset-[26%] rounded-full flex items-center justify-center"
-                style={{
-                  background: `
-                    radial-gradient(circle at 38% 32%,
-                      #ffffff 0%,
-                      #a5f3fc 12%,
-                      #00d4ff 28%,
-                      #0066aa 48%,
-                      #ff8c00 68%,
-                      #1a0500 100%)
-                  `,
-                  boxShadow: `
-                    0 0 ${18 + intensity * 30}px rgba(0,240,255,${0.6 + intensity * 0.35}),
-                    0 0 ${28 + intensity * 24}px rgba(255,140,0,${0.4 + intensity * 0.3}),
-                    inset 0 0 20px rgba(0,0,0,0.5),
-                    0 0 0 2px rgba(255,220,120,0.8),
-                    0 0 0 6px rgba(0,30,50,0.7),
-                    0 0 0 8px rgba(0,200,255,0.35)
-                  `,
-                  border: '2px solid rgba(180,250,255,0.9)',
-                }}
-              >
-                <div
-                  className="absolute inset-[20%] rounded-full"
-                  style={{
-                    background:
-                      'radial-gradient(circle at 40% 35%, #fff 0%, #e0f7ff 30%, #00c0e0 100%)',
-                    boxShadow: `0 0 ${10 + intensity * 14}px rgba(255,255,255,0.85)`,
-                    opacity: 0.95,
-                  }}
-                />
-                <div
-                  className="absolute inset-[8%] rounded-full pointer-events-none"
-                  style={{
-                    border: '1px solid rgba(255,255,255,0.35)',
-                    boxShadow: 'inset 0 0 8px rgba(0,200,255,0.3)',
-                  }}
-                />
-                <span
-                  className="relative font-black tracking-[0.2em] text-white z-10"
-                  style={{
-                    fontSize: n > 10 ? '11px' : '14px',
-                    textShadow:
-                      '0 0 10px rgba(0,220,255,1), 0 1px 3px rgba(0,0,0,0.9)',
-                  }}
-                >
-                  AH
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="absolute bottom-0 left-0 right-0 h-[22%] pointer-events-none overflow-hidden z-20">
-          <div
-            className="absolute bottom-[36%] left-[6%] right-[6%] h-[2px] rounded-full"
-            style={{
-              background: `linear-gradient(90deg, transparent, rgba(0,220,255,${0.25 + intensity * 0.35}), transparent)`,
-              boxShadow: intensity > 0.5 ? '0 0 10px rgba(0,255,255,0.3)' : undefined,
+              inset: '-3.5%',
+              background:
+                'conic-gradient(from 0deg,#35eaff,#075b9a,#ffbf45,#ff762d,#35eaff,#9b5cff,#35eaff)',
+              filter: 'blur(12px)',
+              opacity: 0.55 + intensity * 0.25,
+              animation: busy ? 'fx-neon-rotate 5s linear infinite' : undefined,
             }}
           />
-          {AUDIENCE.map((a, i) => (
+
+          <div
+            className="absolute inset-0 rounded-full"
+            style={{
+              padding: 13,
+              background:
+                'linear-gradient(135deg,#f9d782,#5c390c 16%,#21cce8 28%,#0c243c 43%,#ffb42e 59%,#3beaff 72%,#6a390d 88%,#fbe6a1)',
+              boxShadow:
+                'inset 0 0 0 3px #071522,inset 0 0 20px #fff4b0,0 0 16px rgba(53,234,255,.8),0 0 45px rgba(53,234,255,.25)',
+            }}
+          >
             <div
-              key={i}
-              className={`absolute bottom-0 ${
-                intensity > 0.7 ? 'fx-audience-panic' : busy ? 'fx-audience-sway' : ''
-              }`}
+              className="h-full w-full rounded-full"
               style={{
-                left: `${a.x}%`,
-                transform: `translateX(-50%) scale(${a.scale})`,
-                animationDelay: `${a.delay}s`,
-                width: 24,
-                height: 46,
+                padding: 9,
+                background: 'linear-gradient(145deg,#091321,#26394b 40%,#050a13)',
+                boxShadow: 'inset 0 0 0 2px #7ef5ff,inset 0 0 20px #0087a7',
               }}
             >
               <div
-                className="absolute left-1/2 -translate-x-1/2 top-0 w-[12px] h-[12px] rounded-full"
+                className="relative h-full w-full overflow-hidden rounded-full"
                 style={{
-                  background: '#080c14',
-                  boxShadow:
-                    intensity > 0.55
-                      ? `0 0 7px rgba(255,120,50,${0.3 + intensity * 0.3})`
-                      : '0 0 3px rgba(0,0,0,0.5)',
+                  border: '3px solid #07121c',
+                  transform: `rotate(${rotation}deg)`,
+                  transition:
+                    animating && !spinning
+                      ? 'transform 5.5s cubic-bezier(0.12, 0.72, 0.08, 1)'
+                      : undefined,
+                  boxShadow: 'inset 0 0 22px #000,0 0 15px rgba(0,0,0,.7)',
                 }}
-              />
-              <div
-                className="absolute left-1/2 -translate-x-1/2 top-[10px] w-[17px] h-[24px] rounded-t-[8px]"
-                style={{ background: 'linear-gradient(180deg, #121a28, #080c14)' }}
-              />
-              <div
-                className="absolute left-1/2 -translate-x-1/2 bottom-0 w-[22px] h-[10px] rounded-t-md"
-                style={{
-                  background: 'linear-gradient(180deg, #121a28, #020408)',
-                  boxShadow: '0 0 5px rgba(0,80,120,0.35)',
-                }}
-              />
+              >
+                <svg
+                  viewBox="0 0 500 500"
+                  className="block h-full w-full"
+                  role="img"
+                  aria-label="عجلة المخدومين"
+                >
+                  <defs>
+                    <filter
+                      id="softGlow"
+                      x="-40%"
+                      y="-40%"
+                      width="180%"
+                      height="180%"
+                    >
+                      <feGaussianBlur stdDeviation="3" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
+
+                  {segments.paths.map((s, i) => (
+                    <path
+                      key={`seg-${i}`}
+                      d={s.d}
+                      fill={s.color}
+                      stroke="#071521"
+                      strokeWidth={4}
+                    />
+                  ))}
+
+                  {segments.paths.map((s, i) => {
+                    const maxLen = n > 10 ? 8 : n > 6 ? 10 : 12
+                    const label =
+                      s.name.length > maxLen
+                        ? s.name.slice(0, maxLen - 1) + '…'
+                        : s.name
+                    const fontSize =
+                      s.name.length > 10 ? 13 : n > 8 ? 14 : 16
+                    return (
+                      <g
+                        key={`lbl-${i}`}
+                        transform={`translate(${s.labelX} ${s.labelY}) rotate(${s.mid})`}
+                      >
+                        <text
+                          x={0}
+                          y={0}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fill="#fff"
+                          fontSize={fontSize}
+                          fontWeight="bold"
+                          paintOrder="stroke"
+                          stroke="rgba(0,0,0,.55)"
+                          strokeWidth={3}
+                          strokeLinejoin="round"
+                          filter="url(#softGlow)"
+                        >
+                          {label}
+                        </text>
+                      </g>
+                    )
+                  })}
+
+                  {segments.paths.map((s, i) => (
+                    <circle
+                      key={`bead-${i}`}
+                      cx={s.beadX}
+                      cy={s.beadY}
+                      r={4}
+                      fill="#fff4bf"
+                      stroke="#ffb83d"
+                      strokeWidth={2}
+                      filter="url(#softGlow)"
+                    />
+                  ))}
+
+                  {segments.dots.map((d, i) => (
+                    <circle
+                      key={`dot-${i}`}
+                      cx={d.x}
+                      cy={d.y}
+                      r={d.big ? 2.7 : 1.4}
+                      fill={d.big ? '#fff0b0' : '#55edff'}
+                      opacity={d.big ? 1 : 0.75}
+                    />
+                  ))}
+                </svg>
+              </div>
             </div>
-          ))}
+          </div>
+
+          <div
+            className="absolute left-1/2 top-1/2 z-[3] -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{
+              width: '25%',
+              aspectRatio: '1',
+              background:
+                'radial-gradient(circle at 35% 25%,#f8ffff 0 3%,#48eaff 8%,#12618d 22%,#08172b 43%,#ffb83f 48%,#74330c 55%,#08172a 62%,#20d8ed 75%,#07101d 84%)',
+              border: '4px solid #bafaff',
+              boxShadow:
+                '0 0 0 5px #142d3d,0 0 0 8px #f3ad3d,0 0 22px #35eaff,inset 0 0 17px #000',
+            }}
+          >
+            <div
+              className="absolute rounded-full"
+              style={{
+                inset: '25%',
+                border: '2px solid rgba(255,255,255,.85)',
+                boxShadow: '0 0 14px #fff, inset 0 0 12px #35eaff',
+              }}
+            />
+            <span
+              className="absolute inset-0 flex items-center justify-center font-black tracking-widest text-white"
+              style={{
+                fontSize: n > 10 ? 11 : 13,
+                textShadow: '0 0 8px #35eaff, 0 1px 2px #000',
+              }}
+            >
+              AH
+            </span>
+          </div>
+
+          <div
+            className="absolute left-1/2 z-[6] -translate-x-1/2"
+            style={{
+              top: -20,
+              width: 45,
+              height: 45,
+              transform: 'translateX(-50%) rotate(45deg)',
+              border: '3px solid #fff3bd',
+              background:
+                'linear-gradient(135deg,#fff 0%,#ffc34b 28%,#ff6b2a 55%,#fff5b6 70%,#24eaff 100%)',
+              boxShadow:
+                '0 0 10px #fff,0 0 25px #35eaff,0 0 42px rgba(255,165,45,.8)',
+            }}
+          >
+            <div
+              className="absolute"
+              style={{
+                inset: 7,
+                border: '2px solid #fff',
+                background: 'linear-gradient(135deg,transparent,#ffef9c)',
+              }}
+            />
+          </div>
         </div>
 
         <div
-          className="absolute inset-0 pointer-events-none z-30"
+          className="relative z-[7] mx-auto"
           style={{
+            marginTop: -10,
+            width: 118,
+            height: 34,
+            borderRadius: '50%',
             background:
-              'radial-gradient(ellipse 70% 60% at 50% 40%, transparent 30%, rgba(0,0,0,0.55) 100%)',
+              'linear-gradient(180deg,#fff3bb,#ffb52e 25%,#8a450d 60%,#151b25 78%,#32eaff)',
             boxShadow:
-              intensity > 0.7
-                ? `inset 0 0 ${40 + intensity * 30}px rgba(255,40,0,${0.12 + intensity * 0.12})`
-                : undefined,
+              '0 0 20px rgba(255,177,45,.6),0 0 28px rgba(53,234,255,.25)',
           }}
         />
+        <div
+          className="relative z-[8] mx-auto"
+          style={{
+            marginTop: -69,
+            width: 0,
+            height: 0,
+            borderLeft: '23px solid transparent',
+            borderRight: '23px solid transparent',
+            borderBottom: '65px solid #ffbe43',
+            filter: 'drop-shadow(0 0 5px #fff2b4) drop-shadow(0 0 13px #ff9b24)',
+          }}
+        >
+          <div
+            className="absolute"
+            style={{
+              top: 12,
+              left: -12,
+              borderLeft: '12px solid transparent',
+              borderRight: '12px solid transparent',
+              borderBottom: '39px solid #fff0ae',
+            }}
+          />
+        </div>
+
+        <div
+          className="mt-4 min-h-[28px] text-center font-bold"
+          style={{
+            color: '#fff1ba',
+            textShadow: '0 0 12px rgba(255,190,67,.45)',
+          }}
+        >
+          {selectedName && !busy && landed
+            ? `✨ اللاعب المختار: ${selectedName} ✨`
+            : busy
+              ? 'العجلة تدور... ركّز!'
+              : 'جاهز للتحدّي؟ اضغط على زر الدوران'}
+        </div>
+
+        {!hideSpinButton && (
+          <div className="mt-5 flex justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                sfx.unlock()
+                sfx.uiTap()
+                onSpinRequest()
+              }}
+              disabled={disabled || busy || players.length === 0}
+              className="rounded-full px-8 py-3.5 text-base font-black disabled:cursor-wait disabled:opacity-60"
+              style={{
+                color: '#06111a',
+                background: busy
+                  ? 'linear-gradient(110deg,#9a6b2a,#6b3a10)'
+                  : 'linear-gradient(110deg,#fff0a8,#ffb42e 45%,#35eaff)',
+                boxShadow: busy
+                  ? '0 4px 0 #4a2a08'
+                  : '0 0 18px rgba(53,234,255,.3),0 6px 0 #75440c',
+              }}
+            >
+              {busy ? 'تدور…' : '✦ أدر العجلة ✦'}
+            </button>
+          </div>
+        )}
       </div>
 
-      {selectedName && !busy && landed && (
-        <div className="relative text-center mt-3 fx-neon-name-reveal z-50 px-4">
-          <p
-            className="text-4xl sm:text-5xl font-black tracking-wide"
+      <div
+        className="pointer-events-none absolute bottom-0 left-0 right-0 z-[1] flex items-end justify-around opacity-85"
+        style={{ height: 60 }}
+        aria-hidden
+      >
+        {Array.from({ length: AUDIENCE_COUNT }).map((_, i) => (
+          <i
+            key={i}
+            className="relative block rounded-t-[45%]"
             style={{
-              color: '#fff',
-              textShadow: `
-                0 0 16px #00f0ff,
-                0 0 32px #ff6b00,
-                0 0 56px #ff2d95,
-                0 2px 4px rgba(0,0,0,0.9)
-              `,
+              width: i % 4 === 0 ? 58 : 'clamp(22px,4vw,48px)',
+              height: i % 3 === 0 ? 32 : 42,
+              background: '#02040a',
             }}
           >
-            {selectedName}
-          </p>
-          <p className="mt-1 text-sm text-cyan-300/90 font-medium tracking-wider">
-            ✨ اللاعب المختار
-          </p>
-        </div>
-      )}
-
-      {!hideSpinButton && (
-        <button
-          type="button"
-          onClick={() => {
-            sfx.unlock()
-            sfx.uiTap()
-            onSpinRequest()
-          }}
-          disabled={disabled || busy || players.length === 0}
-          className="fx-btn absolute bottom-[2.5%] left-1/2 -translate-x-1/2 px-12 py-3.5 rounded-2xl text-lg sm:text-xl font-black disabled:opacity-50 z-50"
-          style={{
-            background: busy
-              ? 'linear-gradient(135deg, #7f1d1d, #991b1b)'
-              : 'linear-gradient(135deg, #dc2626, #f97316, #eab308)',
-            boxShadow: busy
-              ? '0 0 22px rgba(220,38,38,0.45)'
-              : '0 0 36px rgba(249,115,22,0.7), 0 4px 20px rgba(0,0,0,0.45)',
-            color: '#fff',
-            textShadow: '0 1px 3px rgba(0,0,0,0.55)',
-          }}
-        >
-          {busy ? 'تدور… 🔥' : 'لف العجلة 🔥'}
-        </button>
-      )}
+            <span
+              className="absolute left-1/2 top-[-17px] block h-[22px] w-[22px] -translate-x-1/2 rounded-full"
+              style={{ background: '#02040a' }}
+            />
+          </i>
+        ))}
+      </div>
     </div>
   )
 }
