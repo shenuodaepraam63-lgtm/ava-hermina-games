@@ -95,7 +95,23 @@ select:focus {
 .fx-shake { animation: fx-shake 0.45s ease-in-out; }
 .fx-flash-ok { animation: fx-flash-green 0.7s ease-out; }
 .fx-flash-bad { animation: fx-flash-red 0.7s ease-out; }
+@keyframes fx-timer-warning {
+  0%, 100% { transform: scale(1); color: #fb923c; }
+  50% { transform: scale(1.07); color: #fcd34d; }
+}
+@keyframes fx-progress-critical {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.7); }
+}
+@keyframes fx-question-pressure {
+  0%, 100% { text-shadow: 0 0 0 rgba(248, 113, 113, 0); }
+  50% { text-shadow: 0 0 18px rgba(248, 113, 113, 0.4); }
+}
 .fx-timer-urgent { animation: fx-timer-urgent 0.5s ease-in-out infinite; }
+.fx-timer-warning { animation: fx-timer-warning 0.8s ease-in-out infinite; }
+.fx-progress-critical { animation: fx-progress-critical 0.45s ease-in-out infinite; }
+.fx-progress-warning { animation: fx-progress-critical 1s ease-in-out infinite; }
+.fx-question-pressure { animation: fx-question-pressure 1s ease-in-out infinite; }
 .fx-score-bump { animation: fx-score-bump 0.45s ease-out; }
 .fx-btn {
   transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease;
