@@ -1,6 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { sfx } from '../../lib/sounds'
 
+function useViewport() {
+  const [vp, setVp] = useState({ w: 1080, h: 600, landscape: true })
+  useEffect(() => {
+    const update = () => {
+      const w = window.innerWidth
+      const h = window.innerHeight
+      setVp({ w, h, landscape: w > h })
+    }
+    update()
+    window.addEventListener('resize', update)
+    window.addEventListener('orientationchange', update)
+    return () => {
+      window.removeEventListener('resize', update)
+      window.removeEventListener('orientationchange', update)
+    }
+  }, [])
+  return vp
+}
+
 export type WheelPlayer = {
   id: string
   name: string
@@ -54,9 +73,28 @@ export function PlayerWheel({
   const landedNotified = useRef(false)
   const onLandedRef = useRef(onLanded)
   onLandedRef.current = onLanded
+  const vp = useViewport()
 
   const n = Math.max(players.length, 1)
   const slice = 360 / n
+
+  const wheelSize = useMemo(() => {
+    if (vp.landscape) {
+      const maxByH = vp.h * 0.58
+      const maxByW = vp.w * 0.42
+      return Math.min(maxByH, maxByW, 380)
+    }
+    const maxByW = vp.w * 0.78
+    const maxByH = vp.h * 0.48
+    return Math.min(maxByW, maxByH, 540)
+  }, [vp])
+
+  const scale = wheelSize / 500
+  const diamondSize = Math.max(28, Math.round(45 * scale))
+  const pointerBaseW = Math.max(70, Math.round(118 * scale))
+  const pointerBaseH = Math.max(20, Math.round(34 * scale))
+  const pointerBorder = Math.max(14, Math.round(23 * scale))
+  const pointerHeight = Math.max(40, Math.round(65 * scale))
 
   const selectedIndex = useMemo(() => {
     if (!selectedRosterId) return -1
@@ -190,7 +228,8 @@ export function PlayerWheel({
       const [x2, y2] = polar(r, end)
       const d = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2} Z`
       const mid = start + step / 2
-      const [lx, ly] = polar(166, mid)
+      const labelR = list.length <= 3 ? 175 : list.length <= 5 ? 170 : 166
+      const [lx, ly] = polar(labelR, mid)
       const [bx, by] = polar(236, mid)
       paths.push({
         d,
@@ -234,9 +273,10 @@ export function PlayerWheel({
         }}
       />
       <div
-        className="absolute top-[4%] bottom-[10%] w-[23%] pointer-events-none"
+        className="absolute top-[4%] bottom-[10%] pointer-events-none"
         style={{
-          left: '-7%',
+          width: vp.landscape ? '12%' : '23%',
+          left: vp.landscape ? '-4%' : '-7%',
           border: '1px solid rgba(53,234,255,.25)',
           background:
             'repeating-linear-gradient(180deg,transparent 0 35px,rgba(53,234,255,.14) 36px 38px,transparent 39px 60px)',
@@ -245,9 +285,10 @@ export function PlayerWheel({
         }}
       />
       <div
-        className="absolute top-[4%] bottom-[10%] w-[23%] pointer-events-none"
+        className="absolute top-[4%] bottom-[10%] pointer-events-none"
         style={{
-          right: '-7%',
+          width: vp.landscape ? '12%' : '23%',
+          right: vp.landscape ? '-4%' : '-7%',
           border: '1px solid rgba(53,234,255,.25)',
           background:
             'repeating-linear-gradient(180deg,transparent 0 35px,rgba(53,234,255,.14) 36px 38px,transparent 39px 60px)',
@@ -269,30 +310,49 @@ export function PlayerWheel({
         }}
       />
 
-      <div className="relative z-10 flex h-full flex-col items-center justify-center px-3 pb-8 pt-6">
-        <div className="mb-2 text-center">
-          <div
-            className="text-xs font-bold tracking-[0.18em]"
-            style={{ color: '#35eaff' }}
-          >
-            AVA HERMINA GAMES
-          </div>
+      <div
+        className="relative z-10 flex h-full flex-col items-center justify-center px-2"
+        style={{
+          paddingTop: vp.landscape ? 8 : 24,
+          paddingBottom: vp.landscape ? 8 : 32,
+        }}
+      >
+        <div
+          className="text-center"
+          style={{ marginBottom: vp.landscape ? 4 : 8 }}
+        >
+          {!vp.landscape && (
+            <div
+              className="text-xs font-bold tracking-[0.18em]"
+              style={{ color: '#35eaff' }}
+            >
+              AVA HERMINA GAMES
+            </div>
+          )}
           <h1
-            className="mt-1 text-[clamp(1.55rem,4vw,2.4rem)] font-black"
-            style={{ textShadow: '0 0 20px rgba(53,234,255,.45)' }}
+            className="font-black"
+            style={{
+              marginTop: vp.landscape ? 0 : 4,
+              fontSize: vp.landscape
+                ? 'clamp(1rem, 3.2vh, 1.5rem)'
+                : 'clamp(1.55rem,4vw,2.4rem)',
+              textShadow: '0 0 20px rgba(53,234,255,.45)',
+            }}
           >
             عَبْقَرِينُو
           </h1>
-          <div className="text-sm" style={{ color: '#a8bfd3' }}>
-            عجلة التحدّي • استعدّ للاختيار
-          </div>
+          {!vp.landscape && (
+            <div className="text-sm" style={{ color: '#a8bfd3' }}>
+              عجلة التحدّي • استعدّ للاختيار
+            </div>
+          )}
         </div>
 
         <div
           className="relative mx-auto"
           style={{
-            width: 'min(78vw, 540px)',
-            aspectRatio: '1',
+            width: wheelSize,
+            height: wheelSize,
             filter: 'drop-shadow(0 18px 35px rgba(0,0,0,.65))',
           }}
         >
@@ -311,7 +371,7 @@ export function PlayerWheel({
           <div
             className="absolute inset-0 rounded-full"
             style={{
-              padding: 13,
+              padding: Math.max(6, Math.round(13 * scale)),
               background:
                 'linear-gradient(135deg,#f9d782,#5c390c 16%,#21cce8 28%,#0c243c 43%,#ffb42e 59%,#3beaff 72%,#6a390d 88%,#fbe6a1)',
               boxShadow:
@@ -321,7 +381,7 @@ export function PlayerWheel({
             <div
               className="h-full w-full rounded-full"
               style={{
-                padding: 9,
+                padding: Math.max(4, Math.round(9 * scale)),
                 background: 'linear-gradient(145deg,#091321,#26394b 40%,#050a13)',
                 boxShadow: 'inset 0 0 0 2px #7ef5ff,inset 0 0 20px #0087a7',
               }}
@@ -376,8 +436,12 @@ export function PlayerWheel({
                       s.name.length > maxLen
                         ? s.name.slice(0, maxLen - 1) + '…'
                         : s.name
-                    const fontSize =
-                      s.name.length > 10 ? 13 : n > 8 ? 14 : 16
+                    const baseFs =
+                      s.name.length > 10 ? 13 : n > 8 ? 14 : n > 4 ? 16 : 18
+                    const fontSize = Math.max(
+                      10,
+                      Math.round(baseFs * Math.min(1, scale * 1.15))
+                    )
                     return (
                       <g
                         key={`lbl-${i}`}
@@ -463,13 +527,13 @@ export function PlayerWheel({
           </div>
 
           <div
-            className="absolute left-1/2 z-[6] -translate-x-1/2"
+            className="absolute left-1/2 z-[6]"
             style={{
-              top: -20,
-              width: 45,
-              height: 45,
+              top: -Math.round(20 * scale),
+              width: diamondSize,
+              height: diamondSize,
               transform: 'translateX(-50%) rotate(45deg)',
-              border: '3px solid #fff3bd',
+              border: `${Math.max(2, Math.round(3 * scale))}px solid #fff3bd`,
               background:
                 'linear-gradient(135deg,#fff 0%,#ffc34b 28%,#ff6b2a 55%,#fff5b6 70%,#24eaff 100%)',
               boxShadow:
@@ -479,7 +543,7 @@ export function PlayerWheel({
             <div
               className="absolute"
               style={{
-                inset: 7,
+                inset: Math.max(4, Math.round(7 * scale)),
                 border: '2px solid #fff',
                 background: 'linear-gradient(135deg,transparent,#ffef9c)',
               }}
@@ -490,9 +554,9 @@ export function PlayerWheel({
         <div
           className="relative z-[7] mx-auto"
           style={{
-            marginTop: -10,
-            width: 118,
-            height: 34,
+            marginTop: -Math.round(10 * scale),
+            width: pointerBaseW,
+            height: pointerBaseH,
             borderRadius: '50%',
             background:
               'linear-gradient(180deg,#fff3bb,#ffb52e 25%,#8a450d 60%,#151b25 78%,#32eaff)',
@@ -503,30 +567,33 @@ export function PlayerWheel({
         <div
           className="relative z-[8] mx-auto"
           style={{
-            marginTop: -69,
+            marginTop: -Math.round(pointerHeight * 1.06),
             width: 0,
             height: 0,
-            borderLeft: '23px solid transparent',
-            borderRight: '23px solid transparent',
-            borderBottom: '65px solid #ffbe43',
+            borderLeft: `${pointerBorder}px solid transparent`,
+            borderRight: `${pointerBorder}px solid transparent`,
+            borderBottom: `${pointerHeight}px solid #ffbe43`,
             filter: 'drop-shadow(0 0 5px #fff2b4) drop-shadow(0 0 13px #ff9b24)',
           }}
         >
           <div
             className="absolute"
             style={{
-              top: 12,
-              left: -12,
-              borderLeft: '12px solid transparent',
-              borderRight: '12px solid transparent',
-              borderBottom: '39px solid #fff0ae',
+              top: Math.round(12 * scale),
+              left: -Math.round(pointerBorder * 0.52),
+              borderLeft: `${Math.round(pointerBorder * 0.52)}px solid transparent`,
+              borderRight: `${Math.round(pointerBorder * 0.52)}px solid transparent`,
+              borderBottom: `${Math.round(pointerHeight * 0.6)}px solid #fff0ae`,
             }}
           />
         </div>
 
         <div
-          className="mt-4 min-h-[28px] text-center font-bold"
+          className="text-center font-bold"
           style={{
+            marginTop: vp.landscape ? 6 : 16,
+            minHeight: vp.landscape ? 20 : 28,
+            fontSize: vp.landscape ? 13 : 16,
             color: '#fff1ba',
             textShadow: '0 0 12px rgba(255,190,67,.45)',
           }}
@@ -539,7 +606,7 @@ export function PlayerWheel({
         </div>
 
         {!hideSpinButton && (
-          <div className="mt-5 flex justify-center">
+          <div className="flex justify-center" style={{ marginTop: vp.landscape ? 8 : 20 }}>
             <button
               type="button"
               onClick={() => {
@@ -548,8 +615,10 @@ export function PlayerWheel({
                 onSpinRequest()
               }}
               disabled={disabled || busy || players.length === 0}
-              className="rounded-full px-8 py-3.5 text-base font-black disabled:cursor-wait disabled:opacity-60"
+              className="rounded-full font-black disabled:cursor-wait disabled:opacity-60"
               style={{
+                padding: vp.landscape ? '8px 22px' : '13px 28px',
+                fontSize: vp.landscape ? 13 : 16,
                 color: '#06111a',
                 background: busy
                   ? 'linear-gradient(110deg,#9a6b2a,#6b3a10)'
@@ -567,7 +636,7 @@ export function PlayerWheel({
 
       <div
         className="pointer-events-none absolute bottom-0 left-0 right-0 z-[1] flex items-end justify-around opacity-85"
-        style={{ height: 60 }}
+        style={{ height: vp.landscape ? 40 : 60 }}
         aria-hidden
       >
         {Array.from({ length: AUDIENCE_COUNT }).map((_, i) => (
@@ -578,6 +647,7 @@ export function PlayerWheel({
               width: i % 4 === 0 ? 58 : 'clamp(22px,4vw,48px)',
               height: i % 3 === 0 ? 32 : 42,
               background: '#02040a',
+              transform: vp.landscape ? 'scale(0.75)' : undefined,
             }}
           >
             <span
