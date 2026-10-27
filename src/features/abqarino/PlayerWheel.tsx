@@ -97,7 +97,7 @@ export function PlayerWheel({
     }
 
     const targetSliceCenter = Math.max(0, idx) * slice + slice / 2
-    const extraTurns = 5 + Math.floor(Math.random() * 2)
+    const extraTurns = 7 + Math.floor(Math.random() * 3)
     const finalRotation =
       angleRef.current +
       extraTurns * 360 +
@@ -106,13 +106,23 @@ export function PlayerWheel({
     setRotation(finalRotation)
     setAnimating(true)
 
+    const DECEL_MS = 6000
     let step = 0
+    const totalSteps = 60
     intensityTimerRef.current = window.setInterval(() => {
       step += 1
-      const t = Math.min(1, step / 32)
-      const eased = t < 0.5 ? t * 0.55 : 0.275 + Math.pow((t - 0.5) * 2, 1.4) * 0.75
+      const t = Math.min(1, step / totalSteps)
+      const eased =
+        t < 0.35
+          ? t * 0.5
+          : t < 0.7
+            ? 0.175 + (t - 0.35) * 0.9
+            : 0.49 + Math.pow((t - 0.7) / 0.3, 1.6) * 0.51
       setIntensity(Math.min(1, eased))
-    }, 100)
+      if (step % 3 === 0 && t > 0.45) {
+        sfx.spinTickSlow()
+      }
+    }, DECEL_MS / totalSteps)
 
     if (landTimerRef.current) window.clearTimeout(landTimerRef.current)
     landTimerRef.current = window.setTimeout(() => {
@@ -122,7 +132,7 @@ export function PlayerWheel({
       }
       const name = players[idx]?.name || players[0]?.name || ''
       notifyLanded(name)
-    }, 3200)
+    }, DECEL_MS)
   }
 
   useEffect(() => {
@@ -138,12 +148,12 @@ export function PlayerWheel({
       let tickCount = 0
       tickRef.current = window.setInterval(() => {
         tickCount += 1
-        const boost = Math.min(14, Math.floor(tickCount / 20))
-        angleRef.current += 34 + boost
+        const boost = Math.min(6, Math.floor(tickCount / 40))
+        angleRef.current += 18 + boost
         setRotation(angleRef.current)
-        sfx.spinTick()
-        setIntensity(0.35 + Math.min(0.35, tickCount / 90))
-      }, 36)
+        if (tickCount % 2 === 0) sfx.spinTick()
+        setIntensity(0.3 + Math.min(0.3, tickCount / 120))
+      }, 55)
     }
 
     if (!spinning && wasSpinning.current && !landedNotified.current) {
@@ -194,7 +204,6 @@ export function PlayerWheel({
     <div
       className={`fixed inset-0 z-40 flex flex-col items-center justify-center overflow-hidden fx-enter ${shakeClass}`}
     >
-      {/* Full viewport stage — edge to edge, no card frame */}
       <div className="absolute inset-0 overflow-hidden">
         <div
           className="absolute inset-0"
@@ -437,7 +446,7 @@ export function PlayerWheel({
                 transform: `rotate(${rotation}deg)`,
                 transition:
                   animating && !spinning
-                    ? 'transform 3.2s cubic-bezier(0.05, 0.75, 0.08, 1)'
+                    ? 'transform 6s cubic-bezier(0.12, 0.6, 0.05, 1)'
                     : undefined,
                 boxShadow: `
                   inset 0 0 40px rgba(0,0,0,0.55),
@@ -618,7 +627,7 @@ export function PlayerWheel({
             onSpinRequest()
           }}
           disabled={disabled || busy || players.length === 0}
-          className="fx-btn relative mt-5 px-14 py-4 rounded-2xl text-xl font-black disabled:opacity-50 z-50"
+          className="fx-btn absolute bottom-[2.5%] left-1/2 -translate-x-1/2 px-12 py-3.5 rounded-2xl text-lg sm:text-xl font-black disabled:opacity-50 z-50"
           style={{
             background: busy
               ? 'linear-gradient(135deg, #7f1d1d, #991b1b)'
