@@ -360,9 +360,9 @@ export const sfx = {
 
   wrong() {
     unlockAudio()
+    // صوت نغمة فقط — بدون كلام «إجابة خاطئة»
     tone(280, 0.18, 'sawtooth', 0.07, 0, 160)
     tone(200, 0.22, 'triangle', 0.05, 0.1)
-    speakDelayed('للأسف خطأ يا عبقرينو', 'ar-SA', 400, 0.9)
   },
 
   playerLost(name?: string) {
