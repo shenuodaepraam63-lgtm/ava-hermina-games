@@ -17,33 +17,35 @@ type Props = {
 }
 
 const NEON_COLORS = [
+  '#00f0ff',
+  '#0077ff',
+  '#00ff9d',
+  '#ff2d95',
+  '#b24dff',
+  '#ffd000',
+  '#ff6b00',
   '#00d4ff',
-  '#0a84ff',
-  '#30d158',
-  '#ff2d55',
-  '#bf5af2',
-  '#ffd60a',
-  '#ff9f0a',
-  '#64d2ff',
-  '#ff375f',
-  '#5e5ce6',
-  '#ffd426',
-  '#ff6482',
+  '#ff4d6d',
+  '#7b61ff',
+  '#ffe566',
+  '#ff8fab',
 ]
 
 const AUDIENCE = [
-  { x: 5, scale: 0.82, delay: 0 },
-  { x: 12, scale: 0.95, delay: 0.08 },
-  { x: 19, scale: 1.05, delay: 0.04 },
-  { x: 26, scale: 0.9, delay: 0.12 },
-  { x: 33, scale: 1.08, delay: 0.06 },
-  { x: 40, scale: 0.92, delay: 0.1 },
-  { x: 60, scale: 0.95, delay: 0.05 },
-  { x: 67, scale: 1.1, delay: 0.14 },
-  { x: 74, scale: 0.88, delay: 0.07 },
-  { x: 81, scale: 1.02, delay: 0.11 },
-  { x: 88, scale: 0.9, delay: 0.03 },
-  { x: 95, scale: 0.98, delay: 0.09 },
+  { x: 4, scale: 0.78, delay: 0 },
+  { x: 10, scale: 0.92, delay: 0.07 },
+  { x: 16, scale: 1.05, delay: 0.03 },
+  { x: 22, scale: 0.88, delay: 0.11 },
+  { x: 28, scale: 1.1, delay: 0.05 },
+  { x: 34, scale: 0.95, delay: 0.09 },
+  { x: 40, scale: 0.85, delay: 0.02 },
+  { x: 60, scale: 0.9, delay: 0.06 },
+  { x: 66, scale: 1.08, delay: 0.12 },
+  { x: 72, scale: 0.92, delay: 0.04 },
+  { x: 78, scale: 1.02, delay: 0.1 },
+  { x: 84, scale: 0.86, delay: 0.08 },
+  { x: 90, scale: 0.98, delay: 0.01 },
+  { x: 96, scale: 0.8, delay: 0.13 },
 ]
 
 export function PlayerWheel({
@@ -173,7 +175,7 @@ export function PlayerWheel({
   }, [])
 
   const gradient = useMemo(() => {
-    if (players.length === 0) return '#0f172a'
+    if (players.length === 0) return '#0a0f1a'
     const parts = players.map((_, i) => {
       const c = NEON_COLORS[i % NEON_COLORS.length]
       const a = (i * slice).toFixed(2)
@@ -195,9 +197,10 @@ export function PlayerWheel({
           : ''
 
   const rimGlow = `
-    0 0 ${24 + intensity * 50}px rgba(0, 240, 255, ${0.45 + intensity * 0.4}),
-    0 0 ${48 + intensity * 70}px rgba(255, 100, 0, ${0.2 + intensity * 0.35}),
-    0 0 ${80 + intensity * 40}px rgba(0, 200, 255, ${0.15 + intensity * 0.2})
+    0 0 ${28 + intensity * 60}px rgba(0, 255, 255, ${0.5 + intensity * 0.45}),
+    0 0 ${55 + intensity * 80}px rgba(255, 80, 0, ${0.25 + intensity * 0.35}),
+    0 0 ${90 + intensity * 50}px rgba(120, 0, 255, ${0.15 + intensity * 0.2}),
+    inset 0 0 20px rgba(0, 200, 255, 0.15)
   `
 
   return (
@@ -209,151 +212,189 @@ export function PlayerWheel({
           className="absolute inset-0"
           style={{
             background: `
-              radial-gradient(ellipse 55% 45% at 50% 38%, rgba(0,60,100,0.35) 0%, transparent 65%),
-              radial-gradient(ellipse 100% 60% at 50% 100%, rgba(10,0,30,0.9) 0%, transparent 50%),
-              linear-gradient(180deg, #020617 0%, #06101f 35%, #0c0618 100%)
+              radial-gradient(ellipse 50% 40% at 50% 35%, rgba(0,80,140,0.45) 0%, transparent 60%),
+              radial-gradient(ellipse 80% 50% at 50% 100%, rgba(40,0,80,0.7) 0%, transparent 50%),
+              radial-gradient(circle at 20% 20%, rgba(0,100,150,0.12), transparent 40%),
+              radial-gradient(circle at 80% 25%, rgba(120,0,180,0.1), transparent 40%),
+              linear-gradient(180deg, #01050c 0%, #050d1a 30%, #0a0618 70%, #020208 100%)
             `,
           }}
         />
+
         <div
-          className="absolute top-0 left-[10%] right-[10%] h-[18%] pointer-events-none opacity-40"
+          className="absolute bottom-0 left-0 right-0 h-[40%] pointer-events-none"
           style={{
-            background:
-              'linear-gradient(180deg, rgba(0,200,255,0.15), transparent), repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(255,180,50,0.06) 40px, rgba(255,180,50,0.06) 42px)',
+            background: `
+              linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%),
+              repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 48px,
+                rgba(0,220,255,0.04) 48px,
+                rgba(0,220,255,0.04) 49px
+              )
+            `,
+            transform: 'perspective(600px) rotateX(55deg)',
+            transformOrigin: 'center bottom',
+            opacity: 0.7,
           }}
         />
 
-        {[6, 94].map((left, i) => (
+        <div
+          className="absolute top-0 left-0 right-0 h-[22%] pointer-events-none opacity-30"
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(0,255,255,0.08), transparent), repeating-linear-gradient(90deg, transparent 0, transparent 60px, rgba(255,180,50,0.05) 60px, rgba(255,180,50,0.05) 62px)',
+          }}
+        />
+
+        {[4, 96].map((left, i) => (
           <div
             key={`scr-${i}`}
-            className="absolute top-[18%] bottom-[28%] w-[7%] rounded-md pointer-events-none overflow-hidden"
+            className="absolute top-[12%] bottom-[22%] w-[8%] rounded-lg pointer-events-none overflow-hidden"
             style={{
               left: `${left}%`,
               transform: 'translateX(-50%)',
-              background: 'linear-gradient(180deg, #0a1628, #020617)',
-              border: '1px solid rgba(0,220,255,0.35)',
-              boxShadow: `0 0 ${8 + intensity * 12}px rgba(0,200,255,0.25), inset 0 0 12px rgba(0,100,150,0.3)`,
+              background: 'linear-gradient(180deg, #031018, #01060c)',
+              border: '1px solid rgba(0,240,255,0.45)',
+              boxShadow: `
+                0 0 ${12 + intensity * 16}px rgba(0,220,255,0.35),
+                inset 0 0 20px rgba(0,100,150,0.4)
+              `,
             }}
           >
             <div
-              className="absolute inset-[3px] rounded-sm"
+              className="absolute inset-[2px] rounded-md"
               style={{
                 background: `
-                  repeating-linear-gradient(0deg, transparent, transparent 6px, rgba(0,255,200,0.08) 6px, rgba(0,255,200,0.08) 7px),
-                  linear-gradient(180deg, rgba(0,80,120,0.4), rgba(80,0,100,0.3))
+                  repeating-linear-gradient(0deg, transparent, transparent 5px, rgba(0,255,220,0.1) 5px, rgba(0,255,220,0.1) 6px),
+                  repeating-linear-gradient(90deg, transparent, transparent 10px, rgba(0,150,255,0.06) 10px, rgba(0,150,255,0.06) 11px),
+                  linear-gradient(180deg, rgba(0,60,100,0.5), rgba(80,0,120,0.35))
                 `,
-                opacity: 0.7 + intensity * 0.25,
+                opacity: 0.85 + intensity * 0.15,
               }}
             />
-            <div className="absolute top-2 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-cyan-400/80" />
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-[60%] h-0.5 rounded bg-amber-400/50" />
+            <div
+              className="absolute top-1 left-1 right-1 h-1.5 rounded-sm"
+              style={{
+                background: 'linear-gradient(90deg, #00f0ff, #ff00aa, #00f0ff)',
+                opacity: 0.7 + intensity * 0.3,
+                boxShadow: '0 0 8px rgba(0,240,255,0.6)',
+              }}
+            />
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[70%] h-0.5 rounded bg-cyan-400/60" />
+            <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[50%] h-[20%] rounded-sm border border-cyan-400/30 bg-cyan-500/10" />
           </div>
         ))}
 
-        {[14, 22, 78, 86].map((left, i) => (
+        {[12, 18, 82, 88].map((left, i) => (
           <div
             key={`p-${i}`}
-            className="absolute top-[10%] bottom-[24%] w-[2px] rounded-full pointer-events-none"
+            className="absolute top-[8%] bottom-[20%] w-[3px] rounded-full pointer-events-none"
             style={{
               left: `${left}%`,
               background:
                 i % 2 === 0
-                  ? 'linear-gradient(180deg, transparent, #00f0ff 30%, #ff00aa 70%, transparent)'
-                  : 'linear-gradient(180deg, transparent, #ff9f0a 30%, #ff2d55 70%, transparent)',
-              opacity: 0.3 + intensity * 0.4,
-              boxShadow: `0 0 ${6 + intensity * 14}px ${i % 2 === 0 ? '#00e5ff' : '#ff8c00'}`,
-              animation: busy ? `fx-neon-flicker ${1.1 + i * 0.25}s ease-in-out infinite` : undefined,
+                  ? 'linear-gradient(180deg, transparent 0%, #00f0ff 25%, #ff00cc 55%, #00f0ff 80%, transparent 100%)'
+                  : 'linear-gradient(180deg, transparent 0%, #ff9f0a 25%, #ff2d55 55%, #ff9f0a 80%, transparent 100%)',
+              opacity: 0.35 + intensity * 0.45,
+              boxShadow: `0 0 ${10 + intensity * 18}px ${i % 2 === 0 ? '#00e5ff' : '#ff8c00'}`,
+              animation: busy ? `fx-neon-flicker ${1 + i * 0.2}s ease-in-out infinite` : undefined,
             }}
           />
         ))}
 
         <div
-          className="absolute bottom-0 left-0 right-0 h-[30%] pointer-events-none"
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[55%] h-[28%] pointer-events-none"
           style={{
-            background: `linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(5,15,30,0.5) 60%, transparent 100%)`,
+            background: `linear-gradient(to top, rgba(0,240,255,${0.12 + intensity * 0.15}), transparent)`,
+            clipPath: 'polygon(20% 100%, 80% 100%, 100% 0%, 0% 0%)',
           }}
         />
         <div
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[62%] h-[26%] pointer-events-none"
+          className="absolute bottom-0 left-[22%] w-[2px] h-[26%] origin-bottom pointer-events-none"
           style={{
-            background: `linear-gradient(to top, rgba(0,220,255,${0.1 + intensity * 0.12}), transparent)`,
-            clipPath: 'polygon(18% 100%, 82% 100%, 100% 0%, 0% 0%)',
+            background: `linear-gradient(to top, rgba(0,255,255,${0.55 + intensity * 0.35}), transparent)`,
+            transform: 'skewX(-12deg)',
+            boxShadow: '0 0 12px rgba(0,255,255,0.5)',
           }}
         />
         <div
-          className="absolute bottom-0 left-[20%] w-[2px] h-[24%] origin-bottom pointer-events-none"
+          className="absolute bottom-0 right-[22%] w-[2px] h-[26%] origin-bottom pointer-events-none"
           style={{
-            background: `linear-gradient(to top, rgba(0,240,255,${0.5 + intensity * 0.35}), transparent)`,
-            transform: 'skewX(-14deg)',
-            boxShadow: `0 0 8px rgba(0,240,255,0.4)`,
-          }}
-        />
-        <div
-          className="absolute bottom-0 right-[20%] w-[2px] h-[24%] origin-bottom pointer-events-none"
-          style={{
-            background: `linear-gradient(to top, rgba(0,240,255,${0.5 + intensity * 0.35}), transparent)`,
-            transform: 'skewX(14deg)',
-            boxShadow: `0 0 8px rgba(0,240,255,0.4)`,
-          }}
-        />
-        <div
-          className="absolute bottom-[2%] left-1/2 -translate-x-1/2 w-[28%] h-[8%] rounded-full pointer-events-none blur-md"
-          style={{
-            background: `radial-gradient(ellipse, rgba(255,160,40,${0.25 + intensity * 0.3}), transparent 70%)`,
+            background: `linear-gradient(to top, rgba(0,255,255,${0.55 + intensity * 0.35}), transparent)`,
+            transform: 'skewX(12deg)',
+            boxShadow: '0 0 12px rgba(0,255,255,0.5)',
           }}
         />
 
         {busy && (
           <>
             <div
-              className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+              className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
               style={{
-                width: '56%',
-                paddingBottom: '56%',
-                border: `2px solid rgba(0,240,255,${0.3 + intensity * 0.3})`,
-                boxShadow: `0 0 ${18 + intensity * 35}px rgba(0,240,255,0.25)`,
-                animation: 'fx-portal-ring 2.5s linear infinite',
+                width: '58%',
+                paddingBottom: '58%',
+                border: `2px solid rgba(0,255,255,${0.35 + intensity * 0.35})`,
+                boxShadow: `0 0 ${24 + intensity * 40}px rgba(0,255,255,0.3)`,
+                animation: 'fx-portal-ring 2.4s linear infinite',
               }}
             />
             <div
-              className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+              className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
               style={{
-                width: '68%',
-                paddingBottom: '68%',
-                border: `1px solid rgba(255,120,0,${0.2 + intensity * 0.25})`,
-                animation: 'fx-portal-ring 3.4s linear infinite reverse',
+                width: '70%',
+                paddingBottom: '70%',
+                border: `1px solid rgba(255,100,0,${0.25 + intensity * 0.3})`,
+                animation: 'fx-portal-ring 3.2s linear infinite reverse',
+              }}
+            />
+            <div
+              className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+              style={{
+                width: '82%',
+                paddingBottom: '82%',
+                border: `1px dashed rgba(180,0,255,${0.15 + intensity * 0.2})`,
+                animation: 'fx-portal-ring 4.5s linear infinite',
               }}
             />
           </>
         )}
 
         <div
-          className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 z-10"
-          style={{ width: 'min(70vw, 400px)' }}
+          className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 z-10"
+          style={{ width: 'min(68vw, 420px)' }}
         >
           <div
-            className="absolute left-1/2 -translate-x-1/2 top-[92%] w-[70%] pointer-events-none"
+            className="absolute left-1/2 -translate-x-1/2 top-[94%] w-[75%] pointer-events-none"
             style={{ zIndex: 1 }}
           >
-            {[0, 1, 2].map((lvl) => (
+            {[0, 1, 2, 3].map((lvl) => (
               <div
                 key={lvl}
                 className="mx-auto rounded-full"
                 style={{
-                  width: `${100 - lvl * 18}%`,
-                  height: 6 + lvl * 2,
-                  marginTop: lvl === 0 ? 0 : 2,
+                  width: `${100 - lvl * 14}%`,
+                  height: 5 + lvl * 2,
+                  marginTop: lvl === 0 ? 0 : 1.5,
                   background:
                     lvl === 0
-                      ? 'linear-gradient(90deg, #1a0a00, #ffb347, #ff8c00, #ffb347, #1a0a00)'
+                      ? 'linear-gradient(90deg, #1a0800, #ffc040, #ff8c00, #ffc040, #1a0800)'
                       : lvl === 1
-                        ? 'linear-gradient(90deg, #0a1520, #00c8e0, #0a1520)'
-                        : 'linear-gradient(90deg, #050508, #333, #050508)',
+                        ? 'linear-gradient(90deg, #051018, #00e0ff, #051018)'
+                        : lvl === 2
+                          ? 'linear-gradient(90deg, #0a0a12, #444, #0a0a12)'
+                          : 'linear-gradient(90deg, #050508, #222, #050508)',
                   boxShadow:
                     lvl === 0
-                      ? `0 0 ${10 + intensity * 14}px rgba(255,160,40,0.55)`
-                      : `0 0 6px rgba(0,200,255,0.25)`,
-                  border: lvl === 0 ? '1px solid rgba(255,220,150,0.6)' : '1px solid rgba(0,0,0,0.4)',
+                      ? `0 0 ${12 + intensity * 16}px rgba(255,160,40,0.65)`
+                      : lvl === 1
+                        ? `0 0 8px rgba(0,220,255,0.4)`
+                        : '0 0 4px rgba(0,0,0,0.5)',
+                  border:
+                    lvl === 0
+                      ? '1px solid rgba(255,230,150,0.7)'
+                      : '1px solid rgba(0,0,0,0.5)',
                 }}
               />
             ))}
@@ -363,35 +404,38 @@ export function PlayerWheel({
             className={`relative aspect-square w-full ${landed ? 'fx-neon-land' : ''}`}
             style={{
               filter: landed
-                ? 'brightness(1.28) saturate(1.35)'
+                ? 'brightness(1.3) saturate(1.4)'
                 : intensity > 0.6
-                  ? `brightness(${1 + intensity * 0.2}) saturate(${1 + intensity * 0.28})`
+                  ? `brightness(${1 + intensity * 0.22}) saturate(${1 + intensity * 0.3})`
                   : undefined,
             }}
           >
             <div
-              className="absolute -inset-[10px] rounded-full pointer-events-none"
+              className="absolute -inset-[14px] rounded-full pointer-events-none"
               style={{
                 background:
-                  'conic-gradient(from 0deg, #00f0ff, #ff00aa, #ffcc00, #00ff88, #00f0ff)',
-                opacity: 0.45 + intensity * 0.4,
-                filter: `blur(${4 + intensity * 3}px)`,
-                animation: busy ? 'fx-neon-rotate 4s linear infinite' : undefined,
+                  'conic-gradient(from 0deg, #00f0ff, #ff00aa, #ffcc00, #00ff88, #7b61ff, #00f0ff)',
+                opacity: 0.5 + intensity * 0.45,
+                filter: `blur(${5 + intensity * 4}px)`,
+                animation: busy ? 'fx-neon-rotate 3.5s linear infinite' : undefined,
               }}
             />
+
             <div
-              className="absolute -inset-[5px] rounded-full pointer-events-none"
+              className="absolute -inset-[7px] rounded-full pointer-events-none"
               style={{
                 background:
-                  'radial-gradient(circle, transparent 72%, #1a1a1e 73%, #3a3a42 78%, #1a1a1e 85%, transparent 86%)',
+                  'radial-gradient(circle, transparent 70%, #0a0e14 72%, #2a3545 76%, #0a0e14 82%, transparent 84%)',
                 boxShadow: rimGlow,
               }}
             />
+
             <div
-              className="absolute -inset-[2px] rounded-full border-[3px] pointer-events-none"
+              className="absolute -inset-[2px] rounded-full pointer-events-none"
               style={{
+                border: '3px solid',
                 borderColor:
-                  intensity > 0.75 ? '#a5f3fc' : intensity > 0.4 ? '#22d3ee' : '#06b6d4',
+                  intensity > 0.75 ? '#b0ffff' : intensity > 0.4 ? '#22d3ee' : '#06b6d4',
                 boxShadow: rimGlow,
                 transition: 'box-shadow 0.12s linear, border-color 0.15s',
               }}
@@ -399,42 +443,46 @@ export function PlayerWheel({
 
             <div
               className="absolute left-1/2 -translate-x-1/2 z-30 pointer-events-none"
-              style={{ top: '-14px' }}
+              style={{ top: '-16px' }}
             >
               <div
-                className="relative w-5 h-5 rotate-45"
+                className="relative w-6 h-6 rotate-45"
                 style={{
-                  background: 'linear-gradient(135deg, #fff 0%, #ffd700 40%, #ff8c00 100%)',
+                  background:
+                    'linear-gradient(135deg, #ffffff 0%, #ffd700 35%, #ff8c00 100%)',
                   boxShadow: `
-                    0 0 10px rgba(255,200,50,0.9),
-                    0 0 20px rgba(0,220,255,0.5),
-                    inset 0 0 6px rgba(255,255,255,0.7)
+                    0 0 12px rgba(255,200,50,1),
+                    0 0 24px rgba(0,240,255,0.6),
+                    inset 0 0 8px rgba(255,255,255,0.8)
                   `,
-                  border: '1px solid rgba(255,240,200,0.9)',
+                  border: '1px solid rgba(255,245,200,0.95)',
                 }}
               >
                 <div
                   className="absolute inset-[3px]"
                   style={{
                     background: 'linear-gradient(135deg, #fff, #a5f3fc)',
-                    opacity: 0.85,
+                    opacity: 0.9,
                   }}
                 />
               </div>
             </div>
 
-            <div className="absolute left-1/2 -translate-x-1/2 z-30" style={{ bottom: '-6px' }}>
+            <div
+              className="absolute left-1/2 -translate-x-1/2 z-30"
+              style={{ bottom: '-8px' }}
+            >
               <div
-                className="w-0 h-0 border-l-[13px] border-r-[13px] border-b-[24px] border-l-transparent border-r-transparent border-b-amber-400"
+                className="w-0 h-0 border-l-[14px] border-r-[14px] border-b-[26px] border-l-transparent border-r-transparent border-b-amber-400"
                 style={{
-                  filter: `drop-shadow(0 0 ${8 + intensity * 12}px #ffaa00)`,
+                  filter: `drop-shadow(0 0 ${10 + intensity * 14}px #ffaa00)`,
                 }}
               />
               <div
-                className="absolute left-1/2 -translate-x-1/2 top-full w-2.5 h-3 rounded-b-sm"
+                className="absolute left-1/2 -translate-x-1/2 top-full w-3 h-3.5 rounded-b-sm"
                 style={{
-                  background: 'linear-gradient(180deg, #ffb347, #cc6600)',
-                  boxShadow: '0 0 6px rgba(255,160,40,0.6)',
+                  background: 'linear-gradient(180deg, #ffc040, #cc5500)',
+                  boxShadow: '0 0 8px rgba(255,160,40,0.7)',
                 }}
               />
             </div>
@@ -449,23 +497,32 @@ export function PlayerWheel({
                     ? 'transform 6s cubic-bezier(0.12, 0.6, 0.05, 1)'
                     : undefined,
                 boxShadow: `
-                  inset 0 0 40px rgba(0,0,0,0.55),
-                  0 0 ${16 + intensity * 40}px rgba(255,80,0,${0.2 + intensity * 0.35})
+                  inset 0 0 50px rgba(0,0,0,0.6),
+                  inset 0 0 20px rgba(0,0,0,0.4),
+                  0 0 ${20 + intensity * 45}px rgba(255,60,0,${0.25 + intensity * 0.35})
                 `,
-                border: '3px solid rgba(10,10,15,0.8)',
+                border: '4px solid rgba(8,12,20,0.9)',
               }}
             >
+              <div
+                className="absolute inset-0 rounded-full pointer-events-none"
+                style={{
+                  background:
+                    'radial-gradient(circle at 50% 50%, transparent 35%, rgba(0,0,0,0.25) 70%, rgba(0,0,0,0.5) 100%)',
+                }}
+              />
+
               {players.map((_, i) => {
                 const a = i * slice
                 return (
                   <div
                     key={`div-${i}`}
-                    className="absolute left-1/2 top-1/2 w-[50%] h-[1.5px] origin-left pointer-events-none"
+                    className="absolute left-1/2 top-1/2 w-[50%] h-[2px] origin-left pointer-events-none"
                     style={{
                       transform: `rotate(${a - 90}deg)`,
                       background:
-                        'linear-gradient(90deg, transparent 8%, rgba(255,255,255,0.35) 30%, rgba(255,255,255,0.9) 100%)',
-                      boxShadow: '0 0 4px rgba(255,255,255,0.4)',
+                        'linear-gradient(90deg, transparent 5%, rgba(255,255,255,0.25) 25%, rgba(255,255,255,0.95) 100%)',
+                      boxShadow: '0 0 6px rgba(255,255,255,0.5)',
                     }}
                   />
                 )
@@ -473,19 +530,22 @@ export function PlayerWheel({
 
               {players.map((p, i) => {
                 const angle = -90 + i * slice + slice / 2
-                const maxLen = n > 10 ? 7 : n > 7 ? 9 : 11
+                const maxLen = n > 10 ? 8 : n > 6 ? 10 : 12
                 const label =
                   p.name.length > maxLen ? p.name.slice(0, maxLen - 1) + '…' : p.name
+                const fontSize =
+                  n > 12 ? '10px' : n > 8 ? '12px' : n > 5 ? '14px' : '16px'
                 return (
                   <div
                     key={p.id}
                     className="absolute left-1/2 top-1/2 origin-left text-white font-black whitespace-nowrap pointer-events-none"
                     style={{
-                      transform: `rotate(${angle}deg) translate(${n > 8 ? 36 : 42}px, -50%)`,
-                      width: n > 10 ? '28%' : '34%',
-                      fontSize: n > 12 ? '8px' : n > 8 ? '10px' : '12px',
+                      transform: `rotate(${angle}deg) translate(${n > 8 ? 40 : 48}px, -50%)`,
+                      width: n > 10 ? '30%' : '36%',
+                      fontSize,
                       textShadow:
-                        '0 0 4px rgba(0,0,0,1), 0 1px 2px rgba(0,0,0,0.95), 0 0 8px rgba(255,255,255,0.15)',
+                        '0 0 6px rgba(0,0,0,1), 0 2px 4px rgba(0,0,0,1), 0 0 12px rgba(255,255,255,0.25)',
+                      letterSpacing: '0.02em',
                     }}
                   >
                     {label}
@@ -494,40 +554,50 @@ export function PlayerWheel({
               })}
 
               <div
-                className="absolute inset-[28%] rounded-full flex items-center justify-center"
+                className="absolute inset-[26%] rounded-full flex items-center justify-center"
                 style={{
                   background: `
-                    radial-gradient(circle at 40% 35%,
-                      #e0f7ff 0%,
-                      #00d4ff 18%,
-                      #0077aa 40%,
-                      #ff8c00 62%,
+                    radial-gradient(circle at 38% 32%,
+                      #ffffff 0%,
+                      #a5f3fc 12%,
+                      #00d4ff 28%,
+                      #0066aa 48%,
+                      #ff8c00 68%,
                       #1a0500 100%)
                   `,
                   boxShadow: `
-                    0 0 ${14 + intensity * 26}px rgba(0,220,255,${0.55 + intensity * 0.35}),
-                    0 0 ${22 + intensity * 20}px rgba(255,140,0,${0.35 + intensity * 0.3}),
-                    inset 0 0 16px rgba(0,0,0,0.45),
-                    0 0 0 2px rgba(255,200,100,0.7),
-                    0 0 0 5px rgba(0,40,60,0.6)
+                    0 0 ${18 + intensity * 30}px rgba(0,240,255,${0.6 + intensity * 0.35}),
+                    0 0 ${28 + intensity * 24}px rgba(255,140,0,${0.4 + intensity * 0.3}),
+                    inset 0 0 20px rgba(0,0,0,0.5),
+                    0 0 0 2px rgba(255,220,120,0.8),
+                    0 0 0 6px rgba(0,30,50,0.7),
+                    0 0 0 8px rgba(0,200,255,0.35)
                   `,
-                  border: '2px solid rgba(180,240,255,0.85)',
+                  border: '2px solid rgba(180,250,255,0.9)',
                 }}
               >
                 <div
-                  className="absolute inset-[22%] rounded-full"
+                  className="absolute inset-[20%] rounded-full"
                   style={{
                     background:
-                      'radial-gradient(circle at 40% 35%, #fff 0%, #a5f3fc 40%, #00a0c0 100%)',
-                    boxShadow: `0 0 ${8 + intensity * 12}px rgba(255,255,255,0.7)`,
-                    opacity: 0.9,
+                      'radial-gradient(circle at 40% 35%, #fff 0%, #e0f7ff 30%, #00c0e0 100%)',
+                    boxShadow: `0 0 ${10 + intensity * 14}px rgba(255,255,255,0.85)`,
+                    opacity: 0.95,
+                  }}
+                />
+                <div
+                  className="absolute inset-[8%] rounded-full pointer-events-none"
+                  style={{
+                    border: '1px solid rgba(255,255,255,0.35)',
+                    boxShadow: 'inset 0 0 8px rgba(0,200,255,0.3)',
                   }}
                 />
                 <span
-                  className="relative font-black tracking-widest text-white z-10"
+                  className="relative font-black tracking-[0.2em] text-white z-10"
                   style={{
-                    fontSize: n > 10 ? '9px' : '12px',
-                    textShadow: '0 0 8px rgba(0,200,255,0.9), 0 1px 2px rgba(0,0,0,0.8)',
+                    fontSize: n > 10 ? '11px' : '14px',
+                    textShadow:
+                      '0 0 10px rgba(0,220,255,1), 0 1px 3px rgba(0,0,0,0.9)',
                   }}
                 >
                   AH
@@ -537,11 +607,12 @@ export function PlayerWheel({
           </div>
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 h-[24%] pointer-events-none overflow-hidden z-20">
+        <div className="absolute bottom-0 left-0 right-0 h-[22%] pointer-events-none overflow-hidden z-20">
           <div
-            className="absolute bottom-[38%] left-[8%] right-[8%] h-[2px] rounded-full"
+            className="absolute bottom-[36%] left-[6%] right-[6%] h-[2px] rounded-full"
             style={{
-              background: `linear-gradient(90deg, transparent, rgba(0,200,255,${0.2 + intensity * 0.3}), transparent)`,
+              background: `linear-gradient(90deg, transparent, rgba(0,220,255,${0.25 + intensity * 0.35}), transparent)`,
+              boxShadow: intensity > 0.5 ? '0 0 10px rgba(0,255,255,0.3)' : undefined,
             }}
           />
           {AUDIENCE.map((a, i) => (
@@ -554,29 +625,29 @@ export function PlayerWheel({
                 left: `${a.x}%`,
                 transform: `translateX(-50%) scale(${a.scale})`,
                 animationDelay: `${a.delay}s`,
-                width: 26,
-                height: 48,
+                width: 24,
+                height: 46,
               }}
             >
               <div
-                className="absolute left-1/2 -translate-x-1/2 top-0 w-[13px] h-[13px] rounded-full"
+                className="absolute left-1/2 -translate-x-1/2 top-0 w-[12px] h-[12px] rounded-full"
                 style={{
-                  background: '#0a0f1a',
+                  background: '#080c14',
                   boxShadow:
                     intensity > 0.55
-                      ? `0 0 6px rgba(255,120,50,${0.25 + intensity * 0.3})`
+                      ? `0 0 7px rgba(255,120,50,${0.3 + intensity * 0.3})`
                       : '0 0 3px rgba(0,0,0,0.5)',
                 }}
               />
               <div
-                className="absolute left-1/2 -translate-x-1/2 top-[11px] w-[18px] h-[26px] rounded-t-[9px]"
-                style={{ background: 'linear-gradient(180deg, #152033, #0a0f1a)' }}
+                className="absolute left-1/2 -translate-x-1/2 top-[10px] w-[17px] h-[24px] rounded-t-[8px]"
+                style={{ background: 'linear-gradient(180deg, #121a28, #080c14)' }}
               />
               <div
-                className="absolute left-1/2 -translate-x-1/2 bottom-0 w-[24px] h-[11px] rounded-t-md"
+                className="absolute left-1/2 -translate-x-1/2 bottom-0 w-[22px] h-[10px] rounded-t-md"
                 style={{
-                  background: 'linear-gradient(180deg, #152033, #020617)',
-                  boxShadow: '0 0 5px rgba(0,80,120,0.3)',
+                  background: 'linear-gradient(180deg, #121a28, #020408)',
+                  boxShadow: '0 0 5px rgba(0,80,120,0.35)',
                 }}
               />
             </div>
@@ -587,10 +658,10 @@ export function PlayerWheel({
           className="absolute inset-0 pointer-events-none z-30"
           style={{
             background:
-              'radial-gradient(ellipse 75% 65% at 50% 38%, transparent 35%, rgba(0,0,0,0.5) 100%)',
+              'radial-gradient(ellipse 70% 60% at 50% 40%, transparent 30%, rgba(0,0,0,0.55) 100%)',
             boxShadow:
               intensity > 0.7
-                ? `inset 0 0 ${35 + intensity * 25}px rgba(255,50,0,${0.12 + intensity * 0.12})`
+                ? `inset 0 0 ${40 + intensity * 30}px rgba(255,40,0,${0.12 + intensity * 0.12})`
                 : undefined,
           }}
         />
@@ -603,10 +674,10 @@ export function PlayerWheel({
             style={{
               color: '#fff',
               textShadow: `
-                0 0 14px #00d4ff,
-                0 0 28px #ff6b00,
-                0 0 48px #ff2d55,
-                0 2px 4px rgba(0,0,0,0.85)
+                0 0 16px #00f0ff,
+                0 0 32px #ff6b00,
+                0 0 56px #ff2d95,
+                0 2px 4px rgba(0,0,0,0.9)
               `,
             }}
           >
@@ -634,7 +705,7 @@ export function PlayerWheel({
               : 'linear-gradient(135deg, #dc2626, #f97316, #eab308)',
             boxShadow: busy
               ? '0 0 22px rgba(220,38,38,0.45)'
-              : '0 0 32px rgba(249,115,22,0.6), 0 4px 20px rgba(0,0,0,0.4)',
+              : '0 0 36px rgba(249,115,22,0.7), 0 4px 20px rgba(0,0,0,0.45)',
             color: '#fff',
             textShadow: '0 1px 3px rgba(0,0,0,0.55)',
           }}
