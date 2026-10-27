@@ -59,13 +59,15 @@ export function PlayPage() {
 
   const settings = data?.session.settings_snapshot || {}
   const soundOn = settings.enable_sound_effects !== false
+  const [soundOverride, setSoundOverride] = useState<boolean | null>(null)
+  const effectiveSoundOn = soundOverride ?? soundOn
   const showCorrect = settings.show_correct_answer_after_response !== false
   const showExplanation = settings.show_explanation_after_response !== false
 
   useEffect(() => {
-    setSoundEnabled(!!soundOn)
+    setSoundEnabled(!!effectiveSoundOn)
     warmSpeech()
-  }, [soundOn])
+  }, [effectiveSoundOn])
 
   const clearPostSpinTimers = () => {
     postSpinTimers.current.forEach((id) => window.clearTimeout(id))
@@ -500,13 +502,15 @@ export function PlayPage() {
           <button
             type="button"
             onClick={() => {
-              setSoundEnabled(!soundOn)
+              const nextSoundState = !effectiveSoundOn
+              setSoundOverride(nextSoundState)
+              setSoundEnabled(nextSoundState)
               sfx.unlock()
               warmSpeech()
             }}
             className="text-sm text-slate-300 hover:text-white fx-btn px-2 py-1 rounded-lg"
           >
-            {soundOn ? '🔊' : '🔇'}
+            {effectiveSoundOn ? '🔊' : '🔇'}
           </button>
           <Link to="/admin" className="text-xs text-slate-400 hover:text-white">
             لوحة التحكم
