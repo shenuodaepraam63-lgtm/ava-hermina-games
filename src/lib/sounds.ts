@@ -4,6 +4,8 @@ let ctx: AudioContext | null = null
 let enabled = true
 let tensionActive = false
 let tensionNodes: AudioNode[] = []
+let spinMusicActive = false
+let spinMusicNodes: AudioNode[] = []
 
 function getCtx() {
   if (typeof window === 'undefined') return null
@@ -19,7 +21,10 @@ function getCtx() {
 
 export function setSoundEnabled(on: boolean) {
   enabled = on
-  if (!on) stopTensionMusic()
+  if (!on) {
+    stopTensionMusic()
+    stopSpinMusic()
+  }
 }
 
 export function unlockAudio() {
@@ -88,6 +93,115 @@ export function stopTensionMusic() {
   })
   tensionNodes = []
   tensionActive = false
+}
+
+/** حماسي أثناء لف العجلة — إيقاع نبضي + نغمات تصاعدية */
+export function startSpinMusic() {
+  if (!enabled || spinMusicActive) return
+  stopSpinMusic()
+  const c = getCtx()
+  if (!c) return
+  if (c.state === 'suspended') void c.resume()
+
+  try {
+    const master = c.createGain()
+    master.gain.value = 0.0001
+    master.gain.exponentialRampToValueAtTime(0.55, c.currentTime + 0.4)
+    master.connect(c.destination)
+
+    const lfo = c.createOscillator()
+    const lfoGain = c.createGain()
+    lfo.type = 'sine'
+    lfo.frequency.value = 2.2
+    lfoGain.gain.value = 0.018
+    lfo.connect(lfoGain)
+
+    const bass = c.createOscillator()
+    const bassGain = c.createGain()
+    bass.type = 'sine'
+    bass.frequency.value = 55
+    bassGain.gain.value = 0.02
+    lfoGain.connect(bassGain.gain)
+    bass.connect(bassGain)
+    bassGain.connect(master)
+
+    const pad = c.createOscillator()
+    const padGain = c.createGain()
+    pad.type = 'sawtooth'
+    pad.frequency.value = 110
+    padGain.gain.value = 0.008
+    const padFilter = c.createBiquadFilter()
+    padFilter.type = 'lowpass'
+    padFilter.frequency.value = 400
+    padFilter.frequency.linearRampToValueAtTime(1200, c.currentTime + 8)
+    pad.connect(padFilter)
+    padFilter.connect(padGain)
+    padGain.connect(master)
+
+    const spark = c.createOscillator()
+    const sparkGain = c.createGain()
+    spark.type = 'square'
+    spark.frequency.value = 880
+    sparkGain.gain.value = 0.004
+    const sparkLfo = c.createOscillator()
+    const sparkLfoG = c.createGain()
+    sparkLfo.frequency.value = 4
+    sparkLfoG.gain.value = 0.0035
+    sparkLfo.connect(sparkLfoG)
+    sparkLfoG.connect(sparkGain.gain)
+    spark.connect(sparkGain)
+    sparkGain.connect(master)
+
+    const fifth = c.createOscillator()
+    const fifthGain = c.createGain()
+    fifth.type = 'triangle'
+    fifth.frequency.value = 165
+    fifthGain.gain.value = 0.006
+    fifth.connect(fifthGain)
+    fifthGain.connect(master)
+
+    lfo.start()
+    bass.start()
+    pad.start()
+    spark.start()
+    sparkLfo.start()
+    fifth.start()
+
+    spinMusicNodes = [
+      lfo, lfoGain, bass, bassGain, pad, padGain, padFilter,
+      spark, sparkGain, sparkLfo, sparkLfoG, fifth, fifthGain, master,
+    ]
+    spinMusicActive = true
+  } catch {
+    stopSpinMusic()
+  }
+}
+
+export function stopSpinMusic() {
+  const c = getCtx()
+  spinMusicNodes.forEach((node) => {
+    try {
+      if (node instanceof GainNode && c) {
+        node.gain.cancelScheduledValues(c.currentTime)
+        node.gain.setValueAtTime(node.gain.value, c.currentTime)
+        node.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.35)
+      }
+    } catch {
+      /* */
+    }
+  })
+  window.setTimeout(() => {
+    spinMusicNodes.forEach((node) => {
+      try {
+        if (node instanceof OscillatorNode) node.stop()
+        node.disconnect()
+      } catch {
+        /* */
+      }
+    })
+    spinMusicNodes = []
+    spinMusicActive = false
+  }, 400)
 }
 
 function tone(
@@ -176,17 +290,27 @@ export const sfx = {
   },
 
   spinStart() {
-    tone(180, 0.15, 'triangle', 0.06, 0, 320)
+    unlockAudio()
+    startSpinMusic()
+    tone(120, 0.2, 'triangle', 0.07, 0, 280)
+    tone(200, 0.25, 'sine', 0.05, 0.05, 400)
   },
 
   spinTick() {
-    tone(380 + Math.random() * 120, 0.03, 'square', 0.028)
+    tone(320 + Math.random() * 80, 0.035, 'square', 0.022)
+  },
+
+  spinTickSlow() {
+    tone(260 + Math.random() * 40, 0.05, 'triangle', 0.03)
+    tone(180, 0.06, 'sine', 0.015, 0.02)
   },
 
   spinEnd() {
-    tone(440, 0.1, 'triangle', 0.09)
-    tone(660, 0.14, 'sine', 0.08, 0.08)
-    tone(880, 0.2, 'sine', 0.07, 0.16)
+    stopSpinMusic()
+    tone(440, 0.12, 'triangle', 0.1)
+    tone(660, 0.16, 'sine', 0.09, 0.1)
+    tone(880, 0.22, 'sine', 0.08, 0.2)
+    tone(1320, 0.18, 'sine', 0.05, 0.32)
   },
 
   nameReveal() {
@@ -241,7 +365,6 @@ export const sfx = {
     speakDelayed('للأسف خطأ يا عبقرينو', 'ar-SA', 400, 0.9)
   },
 
-  /** خسارة اللاعب — نغمة حزينة */
   playerLost(name?: string) {
     unlockAudio()
     tone(220, 0.35, 'sine', 0.08, 0, 110)
