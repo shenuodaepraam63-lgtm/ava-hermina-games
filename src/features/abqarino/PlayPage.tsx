@@ -13,7 +13,7 @@ import {
 import { listGroupsWithCounts, type QuestionGroup } from '../../services/groups.service'
 import { PlayerWheel } from './PlayerWheel'
 import { Confetti } from './Confetti'
-import { setSoundEnabled, sfx, warmSpeech } from '../../lib/sounds'
+import { setSoundEnabled, sfx, warmSpeech, startTensionMusic, stopTensionMusic } from '../../lib/sounds'
 
 function remainingSeconds(deadlineAt: string | null | undefined) {
   if (!deadlineAt) return 0
@@ -129,11 +129,13 @@ export function PlayPage() {
   useEffect(() => {
     if (!data || data.session.status !== 'question_active' || !activeQuestion?.deadline_at) {
       setSecondsLeft(0)
+      stopTensionMusic()
       return
     }
     timeoutFired.current = false
     lastTickSec.current = -1
     sfx.questionAppear()
+    startTensionMusic()
     const tick = () => {
       const left = remainingSeconds(activeQuestion.deadline_at)
       setSecondsLeft(left)
@@ -171,7 +173,10 @@ export function PlayPage() {
     }
     tick()
     const id = window.setInterval(tick, 200)
-    return () => window.clearInterval(id)
+    return () => {
+      window.clearInterval(id)
+      stopTensionMusic()
+    }
   }, [data?.session.status, activeQuestion?.id, activeQuestion?.deadline_at, sessionId, reload, setPhase])
 
   useEffect(() => {
@@ -471,6 +476,11 @@ export function PlayPage() {
   const showWon = status === 'round_complete'
   const showQuestion =
     (status === 'question_active' || status === 'answer_reveal') && !!activeQuestion
+  const timerDurationMs =
+    activeQuestion?.started_at && activeQuestion?.deadline_at
+      ? Math.max(1, new Date(activeQuestion.deadline_at).getTime() - new Date(activeQuestion.started_at).getTime())
+      : Math.max(1, (Number(settings.question_time_seconds) || 45) * 1000)
+  const timerProgress = Math.max(0, Math.min(100, (secondsLeft * 1000 / timerDurationMs) * 100))
 
   return (
     <div
@@ -643,15 +653,44 @@ export function PlayPage() {
               {status === 'question_active' && (
                 <span
                   className={`text-3xl font-mono font-black tabular-nums ${
-                    secondsLeft <= 5 ? 'fx-timer-urgent' : 'text-amber-300'
+                    secondsLeft <= 5
+                      ? 'fx-timer-urgent'
+                      : secondsLeft <= 10
+                        ? 'fx-timer-warning'
+                        : 'text-amber-300'
                   }`}
+                  aria-live="off"
+                  aria-label={`الوقت المتبقي ${secondsLeft} ثانية`}
                 >
                   {secondsLeft}
                   <span className="text-base font-medium mr-1">ث</span>
                 </span>
               )}
             </div>
-            <h2 className="text-xl md:text-2xl font-bold leading-relaxed fx-pop">
+            {status === 'question_active' && (
+              <div
+                className="h-2.5 rounded-full bg-slate-700/80 overflow-hidden border border-white/10"
+                role="progressbar"
+                aria-label="الوقت المتبقي"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(timerProgress)}
+              >
+                <div
+                  className={`h-full rounded-full transition-[width] duration-200 ${
+                    secondsLeft <= 5
+                      ? 'bg-red-500 fx-progress-critical'
+                      : secondsLeft <= 10
+                        ? 'bg-orange-400 fx-progress-warning'
+                        : 'bg-amber-400'
+                  }`}
+                  style={{ width: `${timerProgress}%` }}
+                />
+              </div>
+            )}
+            <h2 className={`text-xl md:text-2xl font-bold leading-relaxed fx-pop ${
+              status === 'question_active' && secondsLeft <= 10 ? 'fx-question-pressure' : ''
+            }`}>
               {activeQuestion.question_text_snapshot}
             </h2>
             {activeQuestion.media_url && activeQuestion.media_type === 'image' && (
