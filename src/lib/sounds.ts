@@ -1,5 +1,5 @@
 /** Web Audio SFX engine for عبقرينو — synthesized, no external files required.
- *  Supports mute, master volume, and layered beds (spin / tension).
+ *  Supports mute, master volume. Continuous pulse beds disabled.
  *  Priority effects: spin start/ticks/stop, question, last-10 ticks, correct, wrong, win.
  */
 
@@ -89,156 +89,21 @@ export function stopAllMusic() {
   stopWinMusic()
 }
 
-/** Low tension bed — rises as time runs out (call setTensionIntensity 0..1). */
+/** Tension bed disabled — was the continuous «دف دف دف» pulse. */
 export function startTensionMusic() {
-  if (!enabled || tensionActive) return
-  const c = getCtx()
-  if (!c) return
-  if (c.state === 'suspended') void c.resume()
-
-  try {
-    const master = c.createGain()
-    master.gain.value = 0.28 * masterVolume
-    const filter = c.createBiquadFilter()
-    filter.type = 'lowpass'
-    filter.frequency.value = 220
-    master.connect(filter)
-    filter.connect(c.destination)
-
-    const droneA = c.createOscillator()
-    const gA = c.createGain()
-    droneA.type = 'sine'
-    droneA.frequency.value = 55
-    gA.gain.value = 0.014
-    droneA.connect(gA)
-    gA.connect(master)
-
-    const droneB = c.createOscillator()
-    const gB = c.createGain()
-    droneB.type = 'triangle'
-    droneB.frequency.value = 82.4
-    gB.gain.value = 0.007
-    droneB.connect(gB)
-    gB.connect(master)
-
-    const pulse = c.createOscillator()
-    const gP = c.createGain()
-    pulse.type = 'sine'
-    pulse.frequency.value = 1.4
-    gP.gain.value = 0.0035
-    pulse.connect(gP)
-    gP.connect(gA.gain)
-
-    droneA.start()
-    droneB.start()
-    pulse.start()
-    tensionNodes = [droneA, droneB, pulse, gA, gB, gP, filter, master]
-    tensionActive = true
-  } catch {
-    stopTensionMusic()
-  }
+  // ملغية بناءً على طلب المستخدم (صوت القطر / دف دف دف)
+  stopTensionMusic()
 }
 
-/** Escalate tension filter/level (0..1) as deadline approaches. */
-export function setTensionIntensity(t: number) {
-  if (!tensionActive || tensionNodes.length < 2) return
-  const c = getCtx()
-  if (!c) return
-  const clamped = Math.max(0, Math.min(1, t))
-  try {
-    for (const n of tensionNodes) {
-      if (n instanceof BiquadFilterNode) {
-        n.frequency.setTargetAtTime(220 + clamped * 900, c.currentTime, 0.25)
-      }
-      if (n instanceof GainNode && n.gain.value > 0.05) {
-        n.gain.setTargetAtTime((0.28 + clamped * 0.35) * masterVolume, c.currentTime, 0.3)
-      }
-    }
-  } catch {
-    /* */
-  }
+/** Escalate tension — no-op while bed is disabled. */
+export function setTensionIntensity(_t: number) {
+  /* disabled */
 }
 
-/** Rising electronic bed while the wheel spins. */
+/** Spin bed disabled — continuous pulse removed. One-shot spin SFX remain. */
 export function startSpinMusic() {
-  if (!enabled || spinMusicActive) return
+  // ملغية — بدون موسيقى خلفية مستمرة أثناء اللف
   stopSpinMusic()
-  const c = getCtx()
-  if (!c) return
-  if (c.state === 'suspended') void c.resume()
-
-  try {
-    const master = c.createGain()
-    master.gain.value = 0.0001
-    master.gain.exponentialRampToValueAtTime(0.5 * masterVolume, c.currentTime + 0.45)
-    master.connect(c.destination)
-
-    const lfo = c.createOscillator()
-    const lfoG = c.createGain()
-    lfo.type = 'sine'
-    lfo.frequency.value = 2.4
-    lfoG.gain.value = 0.02
-    lfo.connect(lfoG)
-
-    const bass = c.createOscillator()
-    const bassG = c.createGain()
-    bass.type = 'sine'
-    bass.frequency.value = 55
-    bassG.gain.value = 0.022
-    lfoG.connect(bassG.gain)
-    bass.connect(bassG)
-    bassG.connect(master)
-
-    const pad = c.createOscillator()
-    const padG = c.createGain()
-    const padF = c.createBiquadFilter()
-    pad.type = 'sawtooth'
-    pad.frequency.value = 110
-    padG.gain.value = 0.009
-    padF.type = 'lowpass'
-    padF.frequency.value = 380
-    padF.frequency.linearRampToValueAtTime(1400, c.currentTime + 8)
-    pad.connect(padF)
-    padF.connect(padG)
-    padG.connect(master)
-
-    const spark = c.createOscillator()
-    const sparkG = c.createGain()
-    spark.type = 'square'
-    spark.frequency.value = 880
-    sparkG.gain.value = 0.0045
-    const sparkLfo = c.createOscillator()
-    const sparkLG = c.createGain()
-    sparkLfo.frequency.value = 4.2
-    sparkLG.gain.value = 0.004
-    sparkLfo.connect(sparkLG)
-    sparkLG.connect(sparkG.gain)
-    spark.connect(sparkG)
-    sparkG.connect(master)
-
-    const fifth = c.createOscillator()
-    const fifthG = c.createGain()
-    fifth.type = 'triangle'
-    fifth.frequency.value = 165
-    fifthG.gain.value = 0.006
-    fifth.connect(fifthG)
-    fifthG.connect(master)
-
-    lfo.start()
-    bass.start()
-    pad.start()
-    spark.start()
-    sparkLfo.start()
-    fifth.start()
-
-    spinMusicNodes = [
-      lfo, lfoG, bass, bassG, pad, padG, padF,
-      spark, sparkG, sparkLfo, sparkLG, fifth, fifthG, master,
-    ]
-    spinMusicActive = true
-  } catch {
-    stopSpinMusic()
-  }
 }
 
 function tone(
@@ -321,7 +186,6 @@ export function warmSpeech() {
 export const sfx = {
   unlock: unlockAudio,
 
-  /** 22. زر إلكتروني */
   uiTap() {
     tone(720, 0.04, 'triangle', 0.035)
   },
@@ -331,13 +195,11 @@ export const sfx = {
     tone(440, 0.05, 'sine', 0.02, 0.02)
   },
 
-  /** 25. إجراء غير متاح */
   deny() {
     tone(240, 0.1, 'triangle', 0.04)
     tone(180, 0.12, 'sine', 0.03, 0.08)
   },
 
-  /** 24. إلغاء */
   cancel() {
     tone(400, 0.06, 'sine', 0.035, 0, 220)
   },
@@ -346,9 +208,6 @@ export const sfx = {
     tone(220, 0.22, 'sawtooth', 0.04, 0, 70)
   },
 
-  // ——— العجلة (1–4) ———
-
-  /** 1. بدء دوران — تصاعدي إلكتروني */
   spinStart() {
     unlockAudio()
     startSpinMusic()
@@ -357,18 +216,15 @@ export const sfx = {
     tone(200, 0.3, 'sine', 0.04, 0.12, 600)
   },
 
-  /** 2. نقرات معدنية سريعة — intensity 0..1 يتبع سرعة العجلة */
   spinTick(intensity = 0.7) {
     metalTick(intensity)
   },
 
-  /** نقرات أبطأ عند التباطؤ */
   spinTickSlow() {
     metalTick(0.35)
     tone(160, 0.05, 'sine', 0.012, 0.02)
   },
 
-  /** 3. توقف العجلة — ضربة معدنية + رنين */
   spinEnd() {
     stopSpinMusic()
     tone(180, 0.08, 'square', 0.1)
@@ -378,45 +234,36 @@ export const sfx = {
     tone(1040, 0.5, 'triangle', 0.03, 0.18)
   },
 
-  /** 4. اختيار المتسابق — انتصار قصير صاعد */
   nameReveal() {
     ;[392, 523, 659, 784, 1046].forEach((f, i) => tone(f, 0.14, 'sine', 0.09, i * 0.07))
     tone(1319, 0.28, 'triangle', 0.06, 0.38)
   },
 
-  /** 29. استعداد قبل العجلة */
   prepMusic() {
     tone(220, 0.2, 'sine', 0.04)
     tone(330, 0.25, 'triangle', 0.035, 0.15)
     tone(440, 0.3, 'sine', 0.03, 0.3)
   },
 
-  // ——— الأسئلة والوقت (5–10) ———
-
-  /** 5. ظهور السؤال */
   questionAppear() {
     tone(330, 0.08, 'sine', 0.05, 0, 520)
     tone(523, 0.1, 'triangle', 0.045, 0.06)
   },
 
-  /** 6. بداية العد التنازلي */
   countdownStart() {
     tone(660, 0.1, 'sine', 0.05)
     tone(880, 0.12, 'triangle', 0.04, 0.08)
   },
 
-  /** دقات عادية (آخر 10–6) */
   tick() {
     tone(900, 0.03, 'square', 0.022)
   },
 
-  /** 7–8. دقات عاجلة — آخر 5 ثوانٍ */
   urgentTick() {
     tone(1150, 0.05, 'square', 0.04)
     tone(900, 0.045, 'square', 0.028, 0.04)
   },
 
-  /** رقم مسموع 3-2-1 */
   secondTick(n?: number) {
     tone(1000, 0.05, 'square', 0.035)
     if (n != null && n >= 1 && n <= 5) {
@@ -424,7 +271,6 @@ export const sfx = {
     }
   },
 
-  /** 9. انتهاء الوقت — جرس حاسم */
   timeout() {
     unlockAudio()
     stopTensionMusic()
@@ -434,9 +280,6 @@ export const sfx = {
     tone(330, 0.25, 'sine', 0.04, 0.32)
   },
 
-  // ——— إجابات ونقاط (11–16) ———
-
-  /** 11. إجابة صحيحة */
   correct() {
     unlockAudio()
     stopTensionMusic()
@@ -444,7 +287,6 @@ export const sfx = {
     speakDelayed('برافو!', 'ar-SA', 480, 0.9)
   },
 
-  /** 14. صحيحة صعبة / أقوى */
   correctHard() {
     unlockAudio()
     stopTensionMusic()
@@ -452,7 +294,6 @@ export const sfx = {
     tone(1319, 0.28, 'triangle', 0.06, 0.45)
   },
 
-  /** 15. سلسلة نجاح */
   streak(level = 1) {
     const n = Math.min(5, Math.max(1, level))
     for (let i = 0; i < n + 2; i++) {
@@ -460,7 +301,6 @@ export const sfx = {
     }
   },
 
-  /** 12. إجابة خاطئة — هبوط قصير بدون كلام */
   wrong() {
     unlockAudio()
     stopTensionMusic()
@@ -468,27 +308,21 @@ export const sfx = {
     tone(200, 0.2, 'triangle', 0.045, 0.08)
   },
 
-  /** 13. إضافة نقطة — لامع (لا يُعاد عند refresh) */
   points() {
     tone(880, 0.07, 'sine', 0.065)
     tone(1175, 0.11, 'sine', 0.055, 0.05)
     tone(1568, 0.1, 'triangle', 0.03, 0.1)
   },
 
-  /** 16. كشف الإجابة */
   revealAnswer() {
     tone(660, 0.12, 'sine', 0.04)
     tone(880, 0.18, 'triangle', 0.03, 0.1)
   },
 
-  /** 21. على بُعد نقطة من الفوز */
   nearWin() {
     ;[659, 784, 988, 1175].forEach((f, i) => tone(f, 0.12, 'sine', 0.07, i * 0.09))
   },
 
-  // ——— فوز وانتقال (17–20) ———
-
-  /** 17–18. فوز باللعبة — 4–6 ثوانٍ بطولي، يوقف باقي الموسيقى */
   win(name?: string) {
     unlockAudio()
     stopTensionMusic()
@@ -529,12 +363,10 @@ export const sfx = {
     speakDelayed(msg, 'ar-SA', 500, 0.85)
   },
 
-  /** 19. انتقال متسابق */
   transition() {
     tone(300, 0.12, 'sine', 0.04, 0, 600)
   },
 
-  /** 20. انتقال فئة / اختيار مجموعة */
   groupSelect() {
     tone(520, 0.1, 'sine', 0.07)
     tone(780, 0.14, 'sine', 0.06, 0.08)
@@ -548,25 +380,21 @@ export const sfx = {
     speakDelayed('You are ready!', 'en-US', 200, 0.92)
   },
 
-  /** 26. كشف اختيارات تدريجي */
   optionReveal(index = 0) {
     tone(400 + index * 60, 0.06, 'sine', 0.03)
   },
 
-  /** 27. هتاف جمهور قصير */
   crowd() {
     for (let i = 0; i < 6; i++) {
       tone(200 + Math.random() * 400, 0.15, 'sawtooth', 0.012, i * 0.03)
     }
   },
 
-  /** 28. تشويق قبل الإعلان */
   suspense() {
     tone(150, 0.4, 'sine', 0.05, 0, 300)
     tone(180, 0.35, 'triangle', 0.04, 0.15, 400)
   },
 
-  /** 23. تأكيد بدء جولة */
   roundStart() {
     tone(523, 0.1, 'sine', 0.06)
     tone(659, 0.12, 'sine', 0.05, 0.1)
