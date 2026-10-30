@@ -22,18 +22,21 @@ export async function fetchCorrectOptionId(
   }
 }
 
+/** 80% الإجابة الصحيحة، 20% إجابة خاطئة */
 export function pickFriendSuggestion(
   opts: OptionSnap[],
   correctId: string | null
 ): string {
   if (!opts.length) return '—'
-  let pick = opts[0]
-  if (correctId && Math.random() < 0.82) {
-    pick = opts.find((o) => o.id === correctId) || opts[0]
-  } else {
-    pick = opts[Math.floor(Math.random() * opts.length)] || opts[0]
+  const correct = correctId ? opts.find((o) => o.id === correctId) : undefined
+  const wrong = opts.filter((o) => o.id !== correctId)
+  if (correct && Math.random() < 0.8) {
+    return correct.option_text
   }
-  return pick.option_text
+  if (wrong.length) {
+    return wrong[Math.floor(Math.random() * wrong.length)].option_text
+  }
+  return (correct || opts[0]).option_text
 }
 
 export function buildAudiencePoll(
