@@ -54,7 +54,6 @@ export function PlayPage() {
   const [holdReveal, setHoldReveal] = useState(false)
   const holdRevealTimer = useRef<number | null>(null)
   const [secondsLeft, setSecondsLeft] = useState(0)
-  /** وسائل مساعدة: مرة واحدة لكل لاعب في الجولة */
   const [friendUsedBy, setFriendUsedBy] = useState<Record<string, boolean>>({})
   const [audienceUsedBy, setAudienceUsedBy] = useState<Record<string, boolean>>({})
   const [friendSuggestion, setFriendSuggestion] = useState<string | null>(null)
@@ -157,7 +156,6 @@ export function PlayPage() {
     )
   }, [data])
 
-  // عند سؤال جديد: نخفي نتائج الوسيلة فقط — الاستخدام مرة واحدة لكل لاعب في الجولة
   useEffect(() => {
     setFriendSuggestion(null)
     setAudiencePoll(null)
@@ -616,12 +614,12 @@ export function PlayPage() {
 
   return (
     <div
-      className={`min-h-screen fx-stage-bg text-white flex flex-col relative overflow-hidden ${
-        flash === 'ok' ? 'fx-flash-ok' : flash === 'bad' ? 'fx-flash-bad' : ''
-      }`}
+      className={`min-h-screen fx-stage-bg text-white flex flex-col relative ${
+        showQuestion ? 'overflow-y-auto overflow-x-hidden' : 'overflow-hidden'
+      } ${flash === 'ok' ? 'fx-flash-ok' : flash === 'bad' ? 'fx-flash-bad' : ''}`}
     >
       <Confetti active={confetti} />
-      <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 backdrop-blur-sm bg-black/20 z-10">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 backdrop-blur-sm bg-black/20 z-10 shrink-0">
         <div>
           <p className="text-xs text-slate-400">عبقرينو</p>
           <p className={`font-bold text-lg ${scoreBump ? 'fx-score-bump text-amber-300' : ''}`}>
@@ -654,7 +652,13 @@ export function PlayPage() {
         </div>
       )}
 
-      <main className="flex-1 flex flex-col items-center justify-center p-6 max-w-3xl mx-auto w-full z-10">
+      <main
+        className={`flex-1 flex flex-col items-center w-full z-10 mx-auto ${
+          showQuestion
+            ? 'justify-start p-3 sm:p-4 max-w-4xl pb-8 overflow-y-auto'
+            : 'justify-center p-6 max-w-3xl'
+        }`}
+      >
         {showLost && (
           <div className="text-center space-y-6 fx-pop max-w-lg">
             <p className="text-5xl">😢</p>
@@ -682,12 +686,7 @@ export function PlayPage() {
             <h2 className="text-3xl font-black text-amber-300">مبروك الفوز!</h2>
             <p className="text-slate-300">{selectedPlayerName} وصل للهدف ({totalScore}/{winningScore})</p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
-              <button
-                type="button"
-                onClick={continueAfterWin}
-                disabled={busy}
-                className="fx-btn px-6 py-3 bg-amber-500 text-slate-900 rounded-xl font-bold"
-              >
+              <button type="button" onClick={continueAfterWin} disabled={busy} className="fx-btn px-6 py-3 bg-amber-500 text-slate-900 rounded-xl font-bold">
                 نكمل اللعبة — العجلة
               </button>
               <Link to="/admin" onClick={() => sfx.click()} className="fx-btn px-6 py-3 bg-slate-700 rounded-xl text-center">
@@ -739,20 +738,20 @@ export function PlayPage() {
         )}
 
         {!showLost && !showWon && showQuestion && activeQuestion && (
-          <div className="w-full space-y-6 fx-enter">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-400">سؤال {(session.current_question_index || 0) + 1}</span>
+          <div className="w-full space-y-3 sm:space-y-5 fx-enter fx-question-panel">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs sm:text-sm text-slate-400 shrink-0">سؤال {(session.current_question_index || 0) + 1}</span>
               {status === 'question_active' && (
-                <span className={`text-3xl font-mono font-black tabular-nums ${
+                <span className={`text-2xl sm:text-3xl font-mono font-black tabular-nums ${
                   secondsLeft <= 5 ? 'fx-timer-urgent' : secondsLeft <= 10 ? 'fx-timer-warning' : 'text-amber-300'
                 }`}>
                   {secondsLeft}
-                  <span className="text-base font-medium mr-1">ث</span>
+                  <span className="text-sm sm:text-base font-medium mr-1">ث</span>
                 </span>
               )}
             </div>
             {status === 'question_active' && (
-              <div className="h-2.5 rounded-full bg-slate-700/80 overflow-hidden border border-white/10">
+              <div className="h-2 sm:h-2.5 rounded-full bg-slate-700/80 overflow-hidden border border-white/10">
                 <div
                   className={`h-full rounded-full transition-[width] duration-200 ${
                     secondsLeft <= 5 ? 'bg-red-500' : secondsLeft <= 10 ? 'bg-orange-400' : 'bg-amber-400'
@@ -761,11 +760,17 @@ export function PlayPage() {
                 />
               </div>
             )}
-            <h2 className="text-xl md:text-2xl font-bold leading-relaxed fx-pop">{activeQuestion.question_text_snapshot}</h2>
+            <h2 className="text-base sm:text-xl md:text-2xl font-bold leading-snug sm:leading-relaxed fx-pop text-center sm:text-right px-1">
+              {activeQuestion.question_text_snapshot}
+            </h2>
             {activeQuestion.media_url && activeQuestion.media_type === 'image' && (
-              <img src={activeQuestion.media_url} alt="" className="max-h-56 mx-auto rounded-2xl border border-slate-600 object-contain fx-pop shadow-xl" />
+              <img
+                src={activeQuestion.media_url}
+                alt=""
+                className="max-h-28 sm:max-h-56 mx-auto rounded-xl sm:rounded-2xl border border-slate-600 object-contain fx-pop shadow-xl"
+              />
             )}
-            <div className="grid gap-3">
+            <div className="grid gap-2 sm:gap-3 fx-options-grid">
               {(activeQuestion.options_snapshot || []).map((opt, i) => {
                 const revealed = status === 'answer_reveal' || !!reveal || holdReveal
                 const isSelected = activeQuestion.selected_option_id === opt.id
@@ -778,7 +783,7 @@ export function PlayPage() {
                     disabled={busy || revealed || status !== 'question_active'}
                     onClick={() => onAnswer(opt.id)}
                     style={{ animationDelay: `${i * 0.05}s` }}
-                    className={`fx-enter fx-option text-right px-4 py-3.5 rounded-xl border text-base ${
+                    className={`fx-enter fx-option text-right px-3 sm:px-4 py-2.5 sm:py-3.5 rounded-xl border text-sm sm:text-base leading-snug ${
                       revealed && isCorrectOpt && showCorrect
                         ? 'bg-green-600/90 border-green-400 fx-pop'
                         : revealed && isSelected && !reveal?.is_correct
@@ -799,7 +804,7 @@ export function PlayPage() {
                     type="button"
                     disabled={friendUsed || lifelineBusy || busy}
                     onClick={() => void useFriendHelp()}
-                    className={`fx-btn px-4 py-2.5 rounded-xl text-sm font-bold border ${
+                    className={`fx-btn px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold border ${
                       friendUsed
                         ? 'bg-slate-800/50 border-slate-700 text-slate-500 line-through'
                         : 'bg-indigo-600/90 border-indigo-400 text-white'
@@ -811,7 +816,7 @@ export function PlayPage() {
                     type="button"
                     disabled={audienceUsed || lifelineBusy || busy}
                     onClick={() => void useAudienceHelp()}
-                    className={`fx-btn px-4 py-2.5 rounded-xl text-sm font-bold border ${
+                    className={`fx-btn px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold border ${
                       audienceUsed
                         ? 'bg-slate-800/50 border-slate-700 text-slate-500 line-through'
                         : 'bg-pink-600/90 border-pink-400 text-white'
