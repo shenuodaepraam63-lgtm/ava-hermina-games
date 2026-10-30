@@ -54,8 +54,9 @@ export function PlayPage() {
   const [holdReveal, setHoldReveal] = useState(false)
   const holdRevealTimer = useRef<number | null>(null)
   const [secondsLeft, setSecondsLeft] = useState(0)
-  const [friendUsed, setFriendUsed] = useState(false)
-  const [audienceUsed, setAudienceUsed] = useState(false)
+  /** وسائل مساعدة: مرة واحدة لكل لاعب في الجولة */
+  const [friendUsedBy, setFriendUsedBy] = useState<Record<string, boolean>>({})
+  const [audienceUsedBy, setAudienceUsedBy] = useState<Record<string, boolean>>({})
   const [friendSuggestion, setFriendSuggestion] = useState<string | null>(null)
   const [audiencePoll, setAudiencePoll] = useState<{ id: string; text: string; pct: number }[] | null>(null)
   const [lifelineBusy, setLifelineBusy] = useState(false)
@@ -137,6 +138,13 @@ export function PlayPage() {
     return () => clearPostSpinTimers()
   }, [sessionId, setPhase])
 
+  useEffect(() => {
+    setFriendUsedBy({})
+    setAudienceUsedBy({})
+    setFriendSuggestion(null)
+    setAudiencePoll(null)
+  }, [sessionId])
+
   const activeQuestion: SessionQuestion | undefined = useMemo(() => {
     if (!data) return undefined
     return (
@@ -149,9 +157,8 @@ export function PlayPage() {
     )
   }, [data])
 
+  // عند سؤال جديد: نخفي نتائج الوسيلة فقط — الاستخدام مرة واحدة لكل لاعب في الجولة
   useEffect(() => {
-    setFriendUsed(false)
-    setAudienceUsed(false)
     setFriendSuggestion(null)
     setAudiencePoll(null)
   }, [activeQuestion?.id])
@@ -392,7 +399,8 @@ export function PlayPage() {
   }
 
   async function useFriendHelp() {
-    if (!activeQuestion || friendUsed || lifelineBusy || data?.session.status !== 'question_active') return
+    const pid = data?.session.selected_player_id
+    if (!activeQuestion || !pid || friendUsedBy[pid] || lifelineBusy || data?.session.status !== 'question_active') return
     setLifelineBusy(true)
     sfx.uiTap()
     try {
@@ -402,7 +410,7 @@ export function PlayPage() {
         reveal?.correct_option_id || activeQuestion.correct_option_id
       )
       setFriendSuggestion(pickFriendSuggestion(opts, correctId))
-      setFriendUsed(true)
+      setFriendUsedBy((prev) => ({ ...prev, [pid]: true }))
       playFriendSfx()
     } finally {
       setLifelineBusy(false)
@@ -410,7 +418,8 @@ export function PlayPage() {
   }
 
   async function useAudienceHelp() {
-    if (!activeQuestion || audienceUsed || lifelineBusy || data?.session.status !== 'question_active') return
+    const pid = data?.session.selected_player_id
+    if (!activeQuestion || !pid || audienceUsedBy[pid] || lifelineBusy || data?.session.status !== 'question_active') return
     setLifelineBusy(true)
     sfx.uiTap()
     try {
@@ -420,7 +429,7 @@ export function PlayPage() {
         reveal?.correct_option_id || activeQuestion.correct_option_id
       )
       setAudiencePoll(buildAudiencePoll(opts, correctId))
-      setAudienceUsed(true)
+      setAudienceUsedBy((prev) => ({ ...prev, [pid]: true }))
       playAudienceSfx()
     } finally {
       setLifelineBusy(false)
@@ -435,8 +444,8 @@ export function PlayPage() {
     clearHoldRevealTimer()
     setHoldReveal(false)
     setReveal(null)
-    setFriendUsed(false)
-    setAudienceUsed(false)
+    setFriendUsedBy({})
+    setAudienceUsedBy({})
     setFriendSuggestion(null)
     setAudiencePoll(null)
     try {
@@ -541,6 +550,10 @@ export function PlayPage() {
     clearHoldRevealTimer()
     setHoldReveal(false)
     setReveal(null)
+    setFriendUsedBy({})
+    setAudienceUsedBy({})
+    setFriendSuggestion(null)
+    setAudiencePoll(null)
     setSelectedGroupId(null)
     setGroupPicking(false)
     setSpinning(false)
@@ -587,6 +600,9 @@ export function PlayPage() {
   const showWheel =
     inSpinFx ||
     ((status === 'ready' || status === 'selecting_player') && !showReadyAlone && !showGroupPicker)
+  const currentPlayerId = session.selected_player_id || ''
+  const friendUsed = !!friendUsedBy[currentPlayerId]
+  const audienceUsed = !!audienceUsedBy[currentPlayerId]
   const showLost = status === 'player_lost' && !holdReveal
   const showWon = status === 'round_complete'
   const showQuestion =
