@@ -121,12 +121,13 @@ export function PlayerWheel({
       intensityTimerRef.current = null
     }
 
+    // السهم ثابت من فوق (زاوية 0). ندور العجلة لحد ما منتصف القطاع ييجي تحت السهم
     const targetSliceCenter = Math.max(0, idx) * slice + slice / 2
     const extraTurns = 7 + Math.floor(Math.random() * 3)
-    const finalRotation =
-      angleRef.current +
-      extraTurns * 360 +
-      ((360 - targetSliceCenter - (angleRef.current % 360) + 360) % 360)
+    const current = ((angleRef.current % 360) + 360) % 360
+    // بعد الدوران: (targetSliceCenter + rotation) % 360 === 0  ⇒  rotation ≡ -target
+    const delta = (360 - targetSliceCenter - current + 360) % 360
+    const finalRotation = angleRef.current + extraTurns * 360 + delta
     angleRef.current = finalRotation
     setRotation(finalRotation)
     setAnimating(true)
@@ -175,15 +176,13 @@ export function PlayerWheel({
         angleRef.current += 18 + boost
         setRotation(angleRef.current)
         if (tickCount % 2 === 0) sfx.spinTick()
-        setIntensity(0.3 + Math.min(0.3, tickCount / 120))
-      }, 55)
+      }, 40)
     }
 
     if (!spinning && wasSpinning.current && !landedNotified.current) {
       const idx = selectedIndex >= 0 ? selectedIndex : 0
       finishToIndex(idx)
     }
-
     wasSpinning.current = spinning
   }, [spinning, selectedIndex, slice, players])
 
@@ -278,10 +277,9 @@ export function PlayerWheel({
           width: vp.landscape ? '12%' : '23%',
           left: vp.landscape ? '-4%' : '-7%',
           border: '1px solid rgba(53,234,255,.25)',
-          background:
-            'repeating-linear-gradient(180deg,transparent 0 35px,rgba(53,234,255,.14) 36px 38px,transparent 39px 60px)',
-          boxShadow: 'inset 0 0 35px #062b3d,0 0 24px rgba(53,234,255,.12)',
-          transform: 'perspective(300px) rotateY(18deg)',
+          borderRight: 'none',
+          background: 'linear-gradient(90deg,rgba(8,40,70,.5),transparent)',
+          boxShadow: 'inset -8px 0 24px rgba(53,234,255,.08)',
         }}
       />
       <div
@@ -290,208 +288,140 @@ export function PlayerWheel({
           width: vp.landscape ? '12%' : '23%',
           right: vp.landscape ? '-4%' : '-7%',
           border: '1px solid rgba(53,234,255,.25)',
-          background:
-            'repeating-linear-gradient(180deg,transparent 0 35px,rgba(53,234,255,.14) 36px 38px,transparent 39px 60px)',
-          boxShadow: 'inset 0 0 35px #062b3d,0 0 24px rgba(53,234,255,.12)',
-          transform: 'perspective(300px) rotateY(-18deg)',
+          borderLeft: 'none',
+          background: 'linear-gradient(270deg,rgba(8,40,70,.5),transparent)',
+          boxShadow: 'inset 8px 0 24px rgba(53,234,255,.08)',
         }}
       />
-
       <div
         className="absolute left-[-10%] right-[-10%] bottom-[-5%] h-[22%] pointer-events-none"
         style={{
-          transform: 'perspective(250px) rotateX(55deg)',
-          background: `
-            repeating-linear-gradient(90deg,transparent 0 9%,rgba(53,234,255,.3) 9.2%,transparent 9.5% 18%),
-            linear-gradient(180deg,rgba(4,16,28,.2),#010308)
-          `,
+          background:
+            'radial-gradient(ellipse at 50% 0%, rgba(255,140,40,.18), transparent 55%)',
           borderTop: '2px solid rgba(53,234,255,.35)',
-          boxShadow: '0 -10px 40px rgba(53,234,255,.1)',
         }}
       />
 
-      <div
-        className="relative z-10 flex h-full flex-col items-center justify-center px-2"
-        style={{
-          paddingTop: vp.landscape ? 8 : 24,
-          paddingBottom: vp.landscape ? 8 : 32,
-        }}
-      >
+      <div className="relative z-10 flex h-full flex-col items-center justify-center px-2">
         <div
-          className="text-center"
-          style={{ marginBottom: vp.landscape ? 4 : 8 }}
-        >
-          {!vp.landscape && (
-            <div
-              className="text-xs font-bold tracking-[0.18em]"
-              style={{ color: '#35eaff' }}
-            >
-              AVA HERMINA GAMES
-            </div>
-          )}
-          <h1
-            className="font-black"
-            style={{
-              marginTop: vp.landscape ? 0 : 4,
-              fontSize: vp.landscape
-                ? 'clamp(1rem, 3.2vh, 1.5rem)'
-                : 'clamp(1.55rem,4vw,2.4rem)',
-              textShadow: '0 0 20px rgba(53,234,255,.45)',
-            }}
-          >
-            عَبْقَرِينُو
-          </h1>
-          {!vp.landscape && (
-            <div className="text-sm" style={{ color: '#a8bfd3' }}>
-              عجلة التحدّي • استعدّ للاختيار
-            </div>
-          )}
-        </div>
-
-        <div
-          className="relative mx-auto"
+          className="relative"
           style={{
             width: wheelSize,
             height: wheelSize,
-            filter: 'drop-shadow(0 18px 35px rgba(0,0,0,.65))',
           }}
         >
           <div
             className="absolute rounded-full pointer-events-none"
             style={{
-              inset: '-3.5%',
-              background:
-                'conic-gradient(from 0deg,#35eaff,#075b9a,#ffbf45,#ff762d,#35eaff,#9b5cff,#35eaff)',
-              filter: 'blur(12px)',
-              opacity: 0.55 + intensity * 0.25,
-              animation: busy ? 'fx-neon-rotate 5s linear infinite' : undefined,
+              inset: -Math.round(18 * scale),
+              border: `${Math.max(3, Math.round(5 * scale))}px solid rgba(53,234,255,.35)`,
+              boxShadow:
+                intensity > 0.5
+                  ? `0 0 ${30 + intensity * 40}px rgba(53,234,255,${0.25 + intensity * 0.35}),0 0 ${60 + intensity * 50}px rgba(255,140,40,${0.12 + intensity * 0.2})`
+                  : '0 0 24px rgba(53,234,255,.2)',
             }}
           />
 
           <div
-            className="absolute inset-0 rounded-full"
+            className="relative h-full w-full overflow-hidden rounded-full"
             style={{
-              padding: Math.max(6, Math.round(13 * scale)),
-              background:
-                'linear-gradient(135deg,#f9d782,#5c390c 16%,#21cce8 28%,#0c243c 43%,#ffb42e 59%,#3beaff 72%,#6a390d 88%,#fbe6a1)',
+              border: `${Math.max(4, Math.round(6 * scale))}px solid #1a3a4a`,
               boxShadow:
-                'inset 0 0 0 3px #071522,inset 0 0 20px #fff4b0,0 0 16px rgba(53,234,255,.8),0 0 45px rgba(53,234,255,.25)',
+                '0 0 0 3px #0a1520, inset 0 0 30px rgba(0,0,0,.6), 0 0 40px rgba(53,234,255,.15)',
             }}
           >
             <div
               className="h-full w-full rounded-full"
               style={{
-                padding: Math.max(4, Math.round(9 * scale)),
-                background: 'linear-gradient(145deg,#091321,#26394b 40%,#050a13)',
-                boxShadow: 'inset 0 0 0 2px #7ef5ff,inset 0 0 20px #0087a7',
+                transform: `rotate(${rotation}deg)`,
+                transition:
+                  animating && !spinning
+                    ? 'transform 5.5s cubic-bezier(0.12, 0.72, 0.08, 1)'
+                    : undefined,
+                boxShadow: 'inset 0 0 22px #000,0 0 15px rgba(0,0,0,.7)',
               }}
             >
-              <div
-                className="relative h-full w-full overflow-hidden rounded-full"
-                style={{
-                  border: '3px solid #07121c',
-                  transform: `rotate(${rotation}deg)`,
-                  transition:
-                    animating && !spinning
-                      ? 'transform 5.5s cubic-bezier(0.12, 0.72, 0.08, 1)'
-                      : undefined,
-                  boxShadow: 'inset 0 0 22px #000,0 0 15px rgba(0,0,0,.7)',
-                }}
-              >
-                <svg
-                  viewBox="0 0 500 500"
-                  className="block h-full w-full"
-                  role="img"
-                  aria-label="عجلة المخدومين"
-                >
-                  <defs>
-                    <filter
-                      id="softGlow"
-                      x="-40%"
-                      y="-40%"
-                      width="180%"
-                      height="180%"
-                    >
-                      <feGaussianBlur stdDeviation="3" result="blur" />
-                      <feMerge>
-                        <feMergeNode in="blur" />
-                        <feMergeNode in="SourceGraphic" />
-                      </feMerge>
-                    </filter>
-                  </defs>
+              <svg viewBox="0 0 500 500" className="h-full w-full">
+                <defs>
+                  <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="1.2" result="b" />
+                    <feMerge>
+                      <feMergeNode in="b" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
 
-                  {segments.paths.map((s, i) => (
+                {segments.paths.map((s, i) => {
+                  const isWinner = landed && selectedIndex === i
+                  return (
                     <path
                       key={`seg-${i}`}
                       d={s.d}
                       fill={s.color}
-                      stroke="#071521"
-                      strokeWidth={4}
+                      stroke={isWinner ? '#fff3bd' : '#071521'}
+                      strokeWidth={isWinner ? 7 : 4}
+                      style={{
+                        filter: isWinner
+                          ? 'brightness(1.35) drop-shadow(0 0 12px rgba(255,200,80,.85))'
+                          : undefined,
+                      }}
                     />
-                  ))}
+                  )
+                })}
 
-                  {segments.paths.map((s, i) => {
-                    const maxLen = n > 10 ? 8 : n > 6 ? 10 : 12
-                    const label =
-                      s.name.length > maxLen
-                        ? s.name.slice(0, maxLen - 1) + '…'
-                        : s.name
-                    const baseFs =
-                      s.name.length > 10 ? 13 : n > 8 ? 14 : n > 4 ? 16 : 18
-                    const fontSize = Math.max(
-                      10,
-                      Math.round(baseFs * Math.min(1, scale * 1.15))
-                    )
-                    return (
-                      <g
-                        key={`lbl-${i}`}
-                        transform={`translate(${s.labelX} ${s.labelY}) rotate(${s.mid})`}
+                {segments.paths.map((s, i) => {
+                  const maxLen = n > 10 ? 8 : n > 6 ? 10 : 12
+                  const label =
+                    s.name.length > maxLen ? s.name.slice(0, maxLen - 1) + '…' : s.name
+                  const fontSize = n > 10 ? 14 : n > 6 ? 16 : 18
+                  return (
+                    <g key={`lbl-${i}`} transform={`rotate(${s.mid}, 250, 250)`}>
+                      <text
+                        x={s.labelX}
+                        y={s.labelY}
+                        transform={`rotate(${-s.mid}, ${s.labelX}, ${s.labelY})`}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fill="#fff"
+                        fontSize={fontSize}
+                        fontWeight="bold"
+                        paintOrder="stroke"
+                        stroke="rgba(0,0,0,.55)"
+                        strokeWidth={3}
+                        strokeLinejoin="round"
+                        filter="url(#softGlow)"
                       >
-                        <text
-                          x={0}
-                          y={0}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          fill="#fff"
-                          fontSize={fontSize}
-                          fontWeight="bold"
-                          paintOrder="stroke"
-                          stroke="rgba(0,0,0,.55)"
-                          strokeWidth={3}
-                          strokeLinejoin="round"
-                          filter="url(#softGlow)"
-                        >
-                          {label}
-                        </text>
-                      </g>
-                    )
-                  })}
+                        {label}
+                      </text>
+                    </g>
+                  )
+                })}
 
-                  {segments.paths.map((s, i) => (
-                    <circle
-                      key={`bead-${i}`}
-                      cx={s.beadX}
-                      cy={s.beadY}
-                      r={4}
-                      fill="#fff4bf"
-                      stroke="#ffb83d"
-                      strokeWidth={2}
-                      filter="url(#softGlow)"
-                    />
-                  ))}
+                {segments.paths.map((s, i) => (
+                  <circle
+                    key={`bead-${i}`}
+                    cx={s.beadX}
+                    cy={s.beadY}
+                    r={4}
+                    fill="#fff4bf"
+                    stroke="#ffb83d"
+                    strokeWidth={2}
+                    filter="url(#softGlow)"
+                  />
+                ))}
 
-                  {segments.dots.map((d, i) => (
-                    <circle
-                      key={`dot-${i}`}
-                      cx={d.x}
-                      cy={d.y}
-                      r={d.big ? 2.7 : 1.4}
-                      fill={d.big ? '#fff0b0' : '#55edff'}
-                      opacity={d.big ? 1 : 0.75}
-                    />
-                  ))}
-                </svg>
-              </div>
+                {segments.dots.map((d, i) => (
+                  <circle
+                    key={`dot-${i}`}
+                    cx={d.x}
+                    cy={d.y}
+                    r={d.big ? 2.7 : 1.4}
+                    fill={d.big ? '#fff0b0' : '#55edff'}
+                    opacity={d.big ? 1 : 0.75}
+                  />
+                ))}
+              </svg>
             </div>
           </div>
 
@@ -526,10 +456,39 @@ export function PlayerWheel({
             </span>
           </div>
 
+          {/* سهم الاختيار — ثابت فوق العجلة ويشير للقطاع الفائز */}
           <div
-            className="absolute left-1/2 z-[6]"
+            className="absolute left-1/2 z-[20]"
             style={{
-              top: -Math.round(20 * scale),
+              top: -Math.round(pointerHeight * 0.92),
+              transform: 'translateX(-50%)',
+              width: 0,
+              height: 0,
+              borderLeft: `${pointerBorder}px solid transparent`,
+              borderRight: `${pointerBorder}px solid transparent`,
+              borderTop: `${pointerHeight}px solid #ffbe43`,
+              filter:
+                'drop-shadow(0 0 6px #fff2b4) drop-shadow(0 0 16px #ff9b24) drop-shadow(0 4px 10px rgba(0,0,0,.55))',
+            }}
+            aria-hidden
+          >
+            <div
+              className="absolute"
+              style={{
+                top: Math.round(pointerHeight * 0.12),
+                left: -Math.round(pointerBorder * 0.55),
+                borderLeft: `${Math.round(pointerBorder * 0.55)}px solid transparent`,
+                borderRight: `${Math.round(pointerBorder * 0.55)}px solid transparent`,
+                borderTop: `${Math.round(pointerHeight * 0.62)}px solid #fff0ae`,
+              }}
+            />
+          </div>
+
+          {/* قاعدة الماس فوق السهم */}
+          <div
+            className="absolute left-1/2 z-[21]"
+            style={{
+              top: -Math.round(pointerHeight * 0.92 + diamondSize * 0.55),
               width: diamondSize,
               height: diamondSize,
               transform: 'translateX(-50%) rotate(45deg)',
@@ -551,10 +510,11 @@ export function PlayerWheel({
           </div>
         </div>
 
+        {/* قاعدة ذهبية تحت العجلة (زينة فقط — الاختيار من السهم فوق) */}
         <div
           className="relative z-[7] mx-auto"
           style={{
-            marginTop: -Math.round(10 * scale),
+            marginTop: -Math.round(8 * scale),
             width: pointerBaseW,
             height: pointerBaseH,
             borderRadius: '50%',
@@ -564,29 +524,6 @@ export function PlayerWheel({
               '0 0 20px rgba(255,177,45,.6),0 0 28px rgba(53,234,255,.25)',
           }}
         />
-        <div
-          className="relative z-[8] mx-auto"
-          style={{
-            marginTop: -Math.round(pointerHeight * 1.06),
-            width: 0,
-            height: 0,
-            borderLeft: `${pointerBorder}px solid transparent`,
-            borderRight: `${pointerBorder}px solid transparent`,
-            borderBottom: `${pointerHeight}px solid #ffbe43`,
-            filter: 'drop-shadow(0 0 5px #fff2b4) drop-shadow(0 0 13px #ff9b24)',
-          }}
-        >
-          <div
-            className="absolute"
-            style={{
-              top: Math.round(12 * scale),
-              left: -Math.round(pointerBorder * 0.52),
-              borderLeft: `${Math.round(pointerBorder * 0.52)}px solid transparent`,
-              borderRight: `${Math.round(pointerBorder * 0.52)}px solid transparent`,
-              borderBottom: `${Math.round(pointerHeight * 0.6)}px solid #fff0ae`,
-            }}
-          />
-        </div>
 
         <div
           className="text-center font-bold"
@@ -599,10 +536,10 @@ export function PlayerWheel({
           }}
         >
           {selectedName && !busy && landed
-            ? `✨ اللاعب المختار: ${selectedName} ✨`
+            ? `✨ السهم اختار: ${selectedName} ✨`
             : busy
-              ? 'العجلة تدور... ركّز!'
-              : 'جاهز للتحدّي؟ اضغط على زر الدوران'}
+              ? 'العجلة تدور... راقب السهم!'
+              : 'جاهز للتحدّي؟ اضغط دوران — الاختيار بالسهم'}
         </div>
 
         {!hideSpinButton && (
